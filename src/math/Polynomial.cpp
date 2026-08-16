@@ -3,7 +3,7 @@
 #include <algorithm>
 
 using namespace std;
-#define M_PI 3.14159
+#include "math/Constants.hpp"
 
 Polynomial::Polynomial() : coeffs{0.0} {}
 
