@@ -35,6 +35,10 @@ bool TextField::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
         if(mousePress->button == sf::Mouse::Button::Left){
             sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
             if(contains(mouse)){
+                // Fresh click in -- clear whatever was there (the "0"
+                // placeholder, or a previous value) instead of appending
+                // to it, so typing always starts from a blank box.
+                if(!focused) value.clear();
                 focused = true;
                 return true;
             }
