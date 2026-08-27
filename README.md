@@ -4,7 +4,7 @@ A C++ desktop tool for analyzing and visualizing linear control systems — stab
 
 ## Why this exists
 
-Built alongside a university Control Systems course, following specific techniques from the course's own guide ("Indrumar TS1"): Faddeev-LeVerrier for the characteristic polynomial, Durand-Kerner for polynomial root-finding, Controllable Canonical Form for state-space realization, Routh-Hurwitz for stability. Doing this analysis by hand for anything past a 2nd-order system means grinding through matrix determinants, polynomial root-finding, and a Routh table just to answer "is this stable" or "what does the root locus look like as K grows" — and one wrong arithmetic step invalidates everything after it. This tool does the actual math instead of a lookup table or a canned example, and lets you *see* the result instead of squinting at a printed list of complex numbers.
+Built alongside a university Control Systems course, following specific techniques from the course's own guide: Faddeev-LeVerrier for the characteristic polynomial, Durand-Kerner for polynomial root-finding, Controllable Canonical Form for state-space realization, Routh-Hurwitz for stability. Doing this analysis by hand for anything past a 3rd-order system means grinding through matrix determinants, polynomial root-finding, and a Routh table just to answer "is this stable" or "what does the root locus look like as K grows" — and one wrong arithmetic step invalidates everything after it. This tool does the actual math instead of a lookup table or a canned example, and lets you *see* the result instead of squinting at a printed list of complex numbers.
 
 ## Features
 
