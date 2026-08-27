@@ -276,6 +276,11 @@ private:
         }
     }
 
+    // Any blank field here means "I didn't actually enter my system" --
+    // rather than nag with an error and leave a half-defined system
+    // sitting around, that's treated as a hard stop: the app just closes.
+    // (Typos that aren't blank -- like "12a" -- still just show an inline
+    // error and let you fix that one field.)
     bool anyFieldEmpty(size_t from, size_t count) const {
         for(size_t i = from; i < from + count; i++)
             if(fields[i].getValue().empty()) return true;

@@ -21,6 +21,33 @@ public:
 
     sf::Vector2f toScreen(double worldX, double worldY) const;
     sf::Vector2f toScreen(const ComplexNumber& z) const;
+    // Inverse of toScreen(): what world point is under a given screen
+    // (pixel) position. Used to pan/zoom around the mouse.
+    std::pair<double, double> toWorld(sf::Vector2f screenPoint) const;
+
+    // Whether a screen point falls inside this plot's pixel rectangle --
+    // check before starting a drag or a zoom so scrolling/dragging
+    // elsewhere in the window (e.g. over a slider) doesn't move the view.
+    bool containsScreenPoint(sf::Vector2f screenPoint) const;
+
+    // Shifts the view by a screen-space pixel delta (the distance the
+    // mouse moved since the last frame while dragging), keeping the zoom
+    // level the same -- click-and-drag panning.
+    void pan(float pixelDX, float pixelDY);
+
+    // Zooms in/out by `factor` (less than 1 zooms in, more than 1 zooms
+    // out) around a fixed screen point -- typically the mouse position,
+    // e.g. for scroll-wheel zoom -- so whatever's under the cursor stays
+    // under the cursor rather than the view re-centering on you.
+    void zoom(double factor, sf::Vector2f aroundScreenPoint);
+
+    double getWorldXMin() const;
+    double getWorldXMax() const;
+    double getWorldYMin() const;
+    double getWorldYMax() const;
+    // Replaces the view outright -- e.g. a "Reset view" button restoring
+    // the original autofit bounds after the user's panned/zoomed away.
+    void setWorldBounds(double xMin, double xMax, double yMin, double yMax);
 
     void drawFrame(sf::RenderWindow& window) const;
     void drawAxes(sf::RenderWindow& window) const;

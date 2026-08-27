@@ -20,6 +20,56 @@ sf::Vector2f Plot::toScreen(const ComplexNumber& z) const {
     return toScreen(z.getReal(), z.getImag());
 }
 
+pair<double, double> Plot::toWorld(sf::Vector2f screenPoint) const {
+    double fx = (screenPoint.x - pixelX) / pixelWidth;
+    double fy = 1.0 - (screenPoint.y - pixelY) / pixelHeight;
+    double worldX = worldXMin + fx * (worldXMax - worldXMin);
+    double worldY = worldYMin + fy * (worldYMax - worldYMin);
+    return {worldX, worldY};
+}
+
+bool Plot::containsScreenPoint(sf::Vector2f screenPoint) const {
+    return screenPoint.x >= pixelX && screenPoint.x <= pixelX + pixelWidth
+        && screenPoint.y >= pixelY && screenPoint.y <= pixelY + pixelHeight;
+}
+
+void Plot::pan(float pixelDX, float pixelDY) {
+    double spanX = worldXMax - worldXMin;
+    double spanY = worldYMax - worldYMin;
+    // Derived from "the world point under the old cursor position should
+    // end up under the new cursor position" -- screenY grows downward
+    // while worldY (the imaginary axis) grows upward, hence the opposite
+    // signs below.
+    double worldDX = -static_cast<double>(pixelDX) / pixelWidth * spanX;
+    double worldDY = static_cast<double>(pixelDY) / pixelHeight * spanY;
+    worldXMin += worldDX; worldXMax += worldDX;
+    worldYMin += worldDY; worldYMax += worldDY;
+}
+
+void Plot::zoom(double factor, sf::Vector2f aroundScreenPoint) {
+    auto [anchorX, anchorY] = toWorld(aroundScreenPoint);
+    double spanX = (worldXMax - worldXMin) * factor;
+    double spanY = (worldYMax - worldYMin) * factor;
+    // Guard against zooming in/out to a degenerate or runaway span.
+    if(spanX < 1e-6 || spanY < 1e-6 || spanX > 1e12 || spanY > 1e12) return;
+
+    double fx = (anchorX - worldXMin) / (worldXMax - worldXMin);
+    double fy = (anchorY - worldYMin) / (worldYMax - worldYMin);
+    worldXMin = anchorX - fx * spanX;
+    worldXMax = worldXMin + spanX;
+    worldYMin = anchorY - fy * spanY;
+    worldYMax = worldYMin + spanY;
+}
+
+double Plot::getWorldXMin() const { return worldXMin; }
+double Plot::getWorldXMax() const { return worldXMax; }
+double Plot::getWorldYMin() const { return worldYMin; }
+double Plot::getWorldYMax() const { return worldYMax; }
+
+void Plot::setWorldBounds(double xMin, double xMax, double yMin, double yMax) {
+    worldXMin = xMin; worldXMax = xMax; worldYMin = yMin; worldYMax = yMax;
+}
+
 void Plot::drawFrame(sf::RenderWindow& window) const {
     sf::RectangleShape rect(sf::Vector2f(pixelWidth, pixelHeight));
     rect.setPosition({pixelX, pixelY});

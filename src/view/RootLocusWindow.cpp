@@ -3,6 +3,7 @@
 #include "control/Stability.hpp"
 #include "view/Plot.hpp"
 #include "view/Slider.hpp"
+#include "view/Button.hpp"
 
 #include <SFML/Graphics.hpp>
 #include <algorithm>
@@ -86,6 +87,16 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
     computeViewBounds(plant, xMin, xMax, yMin, yMax);
     Plot plot(50.0f, 50.0f, 800.0f, 500.0f, xMin, xMax, yMin, yMax);
     Slider slider(50.0f, 610.0f, 800.0f, 0.0, kMax, initialK);
+    Button resetViewButton(760.0f, 15.0f, 90.0f, 28.0f, "Reset view");
+
+    // Click-and-drag to pan, scroll wheel to zoom -- both scoped to the
+    // plot's own rectangle so they don't fight with dragging the K slider
+    // just below it. See computeViewBounds()'s comment for why the initial
+    // fit deliberately doesn't chase every far-off locus branch: this is
+    // how you get to them anyway, without permanently zooming everyone
+    // else out to make room.
+    bool dragging = false;
+    sf::Vector2f lastMouse{};
 
     // Group closed-loop poles into branches by index: locus[i].poles[b] is
     // one point on branch b. Works because RootLocus::compute keeps the
@@ -104,6 +115,33 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
                 currentPoles = plant.closedLoopPoles(slider.getValue());
                 currentlyStable = Stability::routhHurwitz(
                     plant.closedLoopCharacteristicPolynomial(slider.getValue())).stable;
+            }
+
+            if(resetViewButton.handleEvent(*event, window)){
+                plot.setWorldBounds(xMin, xMax, yMin, yMax);
+            }
+
+            sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+            if(const auto* mousePress = event->getIf<sf::Event::MouseButtonPressed>()){
+                if(mousePress->button == sf::Mouse::Button::Left && plot.containsScreenPoint(mouse)){
+                    dragging = true;
+                    lastMouse = mouse;
+                }
+            } else if(const auto* mouseRelease = event->getIf<sf::Event::MouseButtonReleased>()){
+                if(mouseRelease->button == sf::Mouse::Button::Left){
+                    dragging = false;
+                }
+            } else if(event->is<sf::Event::MouseMoved>()){
+                if(dragging){
+                    plot.pan(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
+                    lastMouse = mouse;
+                }
+            } else if(const auto* wheel = event->getIf<sf::Event::MouseWheelScrolled>()){
+                if(plot.containsScreenPoint(mouse)){
+                    double factor = wheel->delta > 0.0f ? 0.9 : (1.0 / 0.9);
+                    plot.zoom(factor, mouse);
+                }
             }
         }
 
@@ -125,6 +163,7 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
         for(auto& p : currentPoles) plot.drawFilledMarker(window, p, poleColor);
 
         slider.draw(window, &font);
+        resetViewButton.draw(window, &font);
 
         ostringstream status;
         status << (currentlyStable ? "STABLE" : "UNSTABLE");
@@ -132,6 +171,11 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
         text.setPosition(sf::Vector2f{50.0f, 15.0f});
         text.setFillColor(currentlyStable ? sf::Color(140, 255, 160) : sf::Color(255, 130, 130));
         window.draw(text);
+
+        sf::Text hint(font, "Drag to pan, scroll to zoom", 12);
+        hint.setPosition(sf::Vector2f{760.0f, 46.0f});
+        hint.setFillColor(sf::Color(140, 140, 150));
+        window.draw(hint);
 
         window.display();
     }
