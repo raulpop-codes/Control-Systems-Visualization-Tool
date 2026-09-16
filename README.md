@@ -136,4 +136,4 @@ On Windows, `gui.exe` has no console window at all, so double-clicking it from E
 
 ## Status
 
-Personal / coursework project for a university Control Systems class. Feedback and suggestions welcome.
+Personal based on a university Control Systems class. Feedback and suggestions welcome.
