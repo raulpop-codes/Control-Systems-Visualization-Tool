@@ -1,5 +1,7 @@
 # Control Systems Visualization Tool
 
+**Stability, root locus and step/impulse response for linear control systems — C++17, SFML 3**
+
 A C++ desktop tool for analyzing and visualizing linear control systems — stability, root locus, and step/impulse response — without doing the linear algebra by hand.
 
 ## Why this exists
@@ -71,8 +73,8 @@ Set the simulation length and time step...
 
 <img src="assets/screenshots/root-locus-viewer.png" width="500">
 
-The closed-loop pole trajectories for k in [0, kMax], with a draggable
-slider that moves K and redraws the current closed-loop poles live --
+The closed-loop pole trajectories for K in [0, Kmax], with a draggable
+slider that moves K and redraws the current closed-loop poles live —
 color-coded green/red for stable/unstable as you cross a stability
 boundary.
 
@@ -101,7 +103,7 @@ Control-Systems-Visualization-Tool
 │   ├── main.cpp       # console menu           -> main.exe
 │   └── main_gui.cpp   # point-and-click launcher, no console -> gui.exe
 ├── test/
-│   └── test_math.cpp  # validation against known analytical results -- no SFML needed
+│   └── test_math.cpp  # validation against known analytical results — no SFML needed
 └── Makefile
 ```
 
@@ -136,4 +138,4 @@ On Windows, `gui.exe` has no console window at all, so double-clicking it from E
 
 ## Status
 
-Personal based on a university Control Systems class. Feedback and suggestions welcome.
+A personal project built alongside a university Control Systems course. Feedback and suggestions are welcome.
