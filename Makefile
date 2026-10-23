@@ -4,9 +4,11 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude
 SRC_MATH = src/math/ComplexNumber.cpp src/math/Matrix.cpp src/math/Polynomial.cpp
 SRC_CONTROL = src/control/TransferFunction.cpp src/control/Stability.cpp \
               src/control/RootLocus.cpp src/control/StateSpace.cpp \
-              src/control/Conversions.cpp src/control/TimeResponse.cpp
+              src/control/Conversions.cpp src/control/TimeResponse.cpp \
+              src/control/FrequencyResponse.cpp
 SRC_VIEW = src/view/Plot.cpp src/view/Slider.cpp src/view/Button.cpp src/view/TextField.cpp \
-           src/view/RootLocusWindow.cpp src/view/TimeResponseWindow.cpp src/view/LauncherWindow.cpp
+           src/view/RootLocusWindow.cpp src/view/TimeResponseWindow.cpp src/view/FrequencyWindow.cpp \
+           src/view/LauncherWindow.cpp
 
 SFML_LIBS = -lsfml-graphics -lsfml-window -lsfml-system
 

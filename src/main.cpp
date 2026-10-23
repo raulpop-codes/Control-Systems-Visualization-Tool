@@ -13,6 +13,7 @@
 #include "control/TimeResponse.hpp"
 #include "view/RootLocusWindow.hpp"
 #include "view/TimeResponseWindow.hpp"
+#include "view/FrequencyWindow.hpp"
 
 #include "math/Constants.hpp"
 
@@ -125,6 +126,18 @@ static void runRootLocus(optional<StateSpace>& ss, optional<TransferFunction>& t
      showRootLocusPlot(*tf, kMax, k);
 }
 
+static void runFrequencyResponse(optional<StateSpace>& ss, optional<TransferFunction>& tf) {
+    if(!tf.has_value()){
+        cout << "Converting state-space to transfer function via Faddeev-LeVerrier...\n";
+        tf = Conversions::toTransferFunction(*ss);
+    }
+
+    // The frequency range is chosen automatically from the poles and zeros,
+    // and K is a slider in the window, so there is nothing to ask here.
+    cout << "Opening Bode / Nichols / Nyquist window (close it to return to the menu)...\n";
+    showFrequencyResponse(*tf);
+}
+
 int main() {
     cout << "=== Control Systems Analysis ===\n\n";
 
@@ -175,7 +188,8 @@ int main() {
         cout << "  2) Step response\n";
         cout << "  3) Impulse response\n";
         cout << "  4) Root locus\n";
-        cout << "  5) Exit\n";
+        cout << "  5) Frequency response (Bode, Nichols, Nyquist, margins)\n";
+        cout << "  6) Exit\n";
         cout << "Choice: ";
         int choice;
         cin >> choice;
@@ -185,7 +199,8 @@ int main() {
             case 2: runTimeResponse(ss, tf, /*isStep=*/true); break;
             case 3: runTimeResponse(ss, tf, /*isStep=*/false); break;
             case 4: runRootLocus(ss, tf); break;
-            case 5: running = false; break;
+            case 5: runFrequencyResponse(ss, tf); break;
+            case 6: running = false; break;
             default: cout << "Not a valid option.\n";
         }
     }

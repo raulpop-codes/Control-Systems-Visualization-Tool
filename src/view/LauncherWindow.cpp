@@ -4,6 +4,7 @@
 #include "view/Font.hpp"
 #include "view/RootLocusWindow.hpp"
 #include "view/TimeResponseWindow.hpp"
+#include "view/FrequencyWindow.hpp"
 
 #include "math/Matrix.hpp"
 #include "math/Polynomial.hpp"
@@ -211,7 +212,8 @@ private:
         buttons.emplace_back(startX + btnW + gapX, 120.0f, btnW, btnH, "Step Response");
         buttons.emplace_back(startX, 120.0f + btnH + gapY, btnW, btnH, "Impulse Response");
         buttons.emplace_back(startX + btnW + gapX, 120.0f + btnH + gapY, btnW, btnH, "Root Locus");
-        buttons.emplace_back(CENTER_X - 140.0f, 120.0f + (btnH + gapY) * 2.0f + 10.0f, 280.0f, 42.0f, "New System");
+        buttons.emplace_back(CENTER_X - 140.0f, 120.0f + (btnH + gapY) * 2.0f, 280.0f, btnH, "Frequency Response");
+        buttons.emplace_back(CENTER_X - 140.0f, 120.0f + (btnH + gapY) * 3.0f + 10.0f, 280.0f, 42.0f, "New System");
     }
 
     void goToStabilityResult() {
@@ -361,6 +363,15 @@ private:
         goToMainMenu();
     }
 
+    // No setup screen like the other analyses: the frequency range is picked
+    // automatically from the poles and zeros, and K is a slider in the window.
+    void onFrequencyResponse() {
+        if(!tf.has_value()) tf = Conversions::toTransferFunction(*ss);
+
+        showFrequencyResponse(*tf);
+        goToMainMenu();
+    }
+
     // ---------------- event handling ----------------
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) {
@@ -403,7 +414,8 @@ private:
                 if(buttons[1].handleEvent(event, window)){ isStep = true; goToTimeResponseSetup(); return; }
                 if(buttons[2].handleEvent(event, window)){ isStep = false; goToTimeResponseSetup(); return; }
                 if(buttons[3].handleEvent(event, window)){ goToRootLocusSetup(); return; }
-                if(buttons[4].handleEvent(event, window)){ ss.reset(); tf.reset(); goToChooseMethod(); return; }
+                if(buttons[4].handleEvent(event, window)){ onFrequencyResponse(); return; }
+                if(buttons[5].handleEvent(event, window)){ ss.reset(); tf.reset(); goToChooseMethod(); return; }
                 break;
 
             case Screen::StabilityResult:

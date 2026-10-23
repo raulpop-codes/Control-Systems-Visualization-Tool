@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <vector>
+#include <algorithm>
 
 using namespace std;
 
@@ -10,7 +12,7 @@ Plot::Plot(float px, float py, float pw, float ph,
            double xMin, double xMax, double yMin, double yMax)
     : pixelX(px), pixelY(py), pixelWidth(pw), pixelHeight(ph),
       worldXMin(xMin), worldXMax(xMax), worldYMin(yMin), worldYMax(yMax),
-      dragging(false), lastMouse{} {}
+      dragging(false), lastMouse{}, logX(false), fixedStepX(0.0), fixedStepY(0.0) {}
 
 sf::Vector2f Plot::toScreen(double worldX, double worldY) const {
     float fx = static_cast<float>((worldX - worldXMin) / (worldXMax - worldXMin));
@@ -69,6 +71,13 @@ double Plot::getWorldXMin() const { return worldXMin; }
 double Plot::getWorldXMax() const { return worldXMax; }
 double Plot::getWorldYMin() const { return worldYMin; }
 double Plot::getWorldYMax() const { return worldYMax; }
+
+void Plot::setLogX(bool on) { logX = on; }
+
+void Plot::setFixedSteps(double stepX, double stepY) {
+    fixedStepX = stepX;
+    fixedStepY = stepY;
+}
 
 void Plot::setWorldBounds(double xMin, double xMax, double yMin, double yMax) {
     worldXMin = xMin; worldXMax = xMax; worldYMin = yMin; worldYMax = yMax;
@@ -129,6 +138,17 @@ static double niceStep(double span, double targetTicks) {
     return nice * magnitude;
 }
 
+// Same idea as niceStep(), but when a preferred spacing is set it is kept as
+// long as it doesn't crowd the axis, and doubled (45, 90, 180, 360 ...) when
+// it does.
+static double stepFor(double span, double targetTicks, double preferred) {
+    double raw = span / targetTicks;
+    if(!(preferred > 0.0)) return niceStep(span, targetTicks);
+    double step = preferred;
+    for(int i = 0; i < 60 && step < raw; i++) step *= 2.0;
+    return step;
+}
+
 static string formatTick(double value, double step) {
     if(fabs(value) < step * 1e-6) value = 0.0; // rounding noise would print "-0"
     ostringstream out;
@@ -147,13 +167,29 @@ void Plot::drawGrid(sf::RenderWindow& window) const {
     if(!(spanX > 0.0) || !(spanY > 0.0) || !isfinite(spanX) || !isfinite(spanY)) return;
 
     sf::Color gridColor(40, 40, 48);
-    double stepX = niceStep(spanX, pixelWidth / 90.0);
-    double stepY = niceStep(spanY, pixelHeight / 60.0);
+    double stepX = stepFor(spanX, pixelWidth / 90.0, fixedStepX);
+    double stepY = stepFor(spanY, pixelHeight / 60.0, fixedStepY);
 
-    double firstX = ceil(worldXMin / stepX);
-    for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
-        double x = (firstX + n) * stepX;
-        drawLine(window, toScreen(x, worldYMin), toScreen(x, worldYMax), gridColor);
+    if(logX){
+        // x = log10(w): a line at every power of ten, and -- while there is
+        // room for them -- fainter ones at 2, 3 ... 9 times it.
+        sf::Color minorColor(28, 28, 36);
+        bool showMinor = spanX <= 8.0;
+        int count = 0;
+        for(int k = static_cast<int>(floor(worldXMin)); k <= worldXMax && count < MAX_TICKS; k++, count++){
+            for(int m = 1; m <= 9; m++){
+                if(m > 1 && !showMinor) break;
+                double x = k + log10(static_cast<double>(m));
+                if(x < worldXMin || x > worldXMax) continue;
+                drawLine(window, toScreen(x, worldYMin), toScreen(x, worldYMax), m == 1 ? gridColor : minorColor);
+            }
+        }
+    } else {
+        double firstX = ceil(worldXMin / stepX);
+        for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
+            double x = (firstX + n) * stepX;
+            drawLine(window, toScreen(x, worldYMin), toScreen(x, worldYMax), gridColor);
+        }
     }
     double firstY = ceil(worldYMin / stepY);
     for(int n = 0; n < MAX_TICKS && (firstY + n) * stepY <= worldYMax; n++){
@@ -168,17 +204,34 @@ void Plot::drawTickLabels(sf::RenderWindow& window, const sf::Font* font) const 
     if(!(spanX > 0.0) || !(spanY > 0.0) || !isfinite(spanX) || !isfinite(spanY)) return;
 
     sf::Color tickColor(150, 150, 160);
-    double stepX = niceStep(spanX, pixelWidth / 90.0);
-    double stepY = niceStep(spanY, pixelHeight / 60.0);
+    double stepX = stepFor(spanX, pixelWidth / 90.0, fixedStepX);
+    double stepY = stepFor(spanY, pixelHeight / 60.0, fixedStepY);
     float bottom = pixelY + pixelHeight;
 
-    double firstX = ceil(worldXMin / stepX);
-    for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
-        double x = (firstX + n) * stepX;
-        float screenX = toScreen(x, worldYMin).x;
+    // The x ticks first as (world x, text) pairs, so the drawing below is the
+    // same whether the axis is linear or logarithmic.
+    vector<pair<double, string>> xTicks;
+    if(logX){
+        // One label per power of ten -- every 2nd, 5th ... one when the view
+        // spans so many decades that the numbers would overlap.
+        int every = max(1, static_cast<int>(ceil(spanX / (pixelWidth / 70.0))));
+        int count = 0;
+        for(int k = static_cast<int>(ceil(worldXMin)); k <= worldXMax && count < MAX_TICKS; k++, count++){
+            if(k % every != 0) continue;
+            xTicks.push_back({static_cast<double>(k), formatTick(pow(10.0, k), 0.0)});
+        }
+    } else {
+        double firstX = ceil(worldXMin / stepX);
+        for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
+            double x = (firstX + n) * stepX;
+            xTicks.push_back({x, formatTick(x, stepX)});
+        }
+    }
+    for(auto& tick : xTicks){
+        float screenX = toScreen(tick.first, worldYMin).x;
         drawLine(window, sf::Vector2f(screenX, bottom), sf::Vector2f(screenX, bottom + 4.0f), tickColor);
         if(font != nullptr){
-            sf::Text text(*font, formatTick(x, stepX), 12);
+            sf::Text text(*font, tick.second, 12);
             sf::FloatRect b = text.getLocalBounds();
             text.setOrigin({b.position.x + b.size.x / 2.0f, 0.0f}); // centered under the tick
             text.setPosition({screenX, bottom + 6.0f});
@@ -224,7 +277,7 @@ void Plot::drawAxes(sf::RenderWindow& window) const {
     if(worldYMin < 0 && worldYMax > 0){
         drawLine(window, toScreen(worldXMin, 0.0), toScreen(worldXMax, 0.0), sf::Color(120, 120, 130));
     }
-    if(worldXMin < 0 && worldXMax > 0){
+    if(!logX && worldXMin < 0 && worldXMax > 0){
         drawLine(window, toScreen(0.0, worldYMin), toScreen(0.0, worldYMax), sf::Color(120, 120, 130));
     }
 }

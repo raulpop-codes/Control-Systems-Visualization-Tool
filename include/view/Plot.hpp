@@ -19,6 +19,13 @@ private:
     bool dragging;
     sf::Vector2f lastMouse;
 
+    // Bode plots: the world x coordinate is log10(w), so pan, zoom and
+    // toScreen() work unchanged, and only the grid and the numbers have to
+    // know that x = k means 10^k (see setLogX).
+    bool logX;
+    // Preferred tick spacing (0 = automatic) -- e.g. 45 for a phase axis.
+    double fixedStepX, fixedStepY;
+
 public:
     Plot(float pixelX, float pixelY, float pixelWidth, float pixelHeight,
          double worldXMin, double worldXMax, double worldYMin, double worldYMax);
@@ -44,6 +51,15 @@ public:
     // e.g. for scroll-wheel zoom -- so whatever's under the cursor stays
     // under the cursor rather than the view re-centering on you.
     void zoom(double factor, sf::Vector2f aroundScreenPoint);
+
+    // Makes the x axis a logarithmic one: the world x coordinate is then
+    // log10 of the value shown, grid lines go at every power of ten (and
+    // fainter ones at 2..9 times it) and the numbers read 0.01, 0.1, 1, 10 ...
+    // The vertical axis line at x = 0 is not drawn (x = 0 is just w = 1).
+    void setLogX(bool on);
+    // Ticks at multiples of these (doubled while the view is too crowded)
+    // instead of 1/2/5 x 10^n -- so a phase axis can read 0, -90, -180, -270.
+    void setFixedSteps(double stepX, double stepY);
 
     double getWorldXMin() const;
     double getWorldXMax() const;

@@ -14,6 +14,7 @@ Built alongside a university Control Systems course, following specific techniqu
 - **Stability analysis** — full Routh-Hurwitz table, right-half-plane root count, and a stable / marginally-stable / unstable verdict.
 - **Interactive root locus** — branches are tracked by predictive extrapolation as K sweeps, so they don't swap identity near breakaway/break-in points; a live K slider shows the current closed-loop poles and stability in real time. The view **auto-fits** to the system's poles and zeros (even when they are orders of magnitude apart), and you can **drag to pan**, **scroll to zoom**, and hit **Reset view** to snap back.
 - **Step and impulse response** — numerically simulated from the state-space model (fourth-order Runge-Kutta) and plotted as a time-domain graph, with the same auto-fit, pan and zoom.
+- **Frequency response** — Bode (magnitude and unwrapped phase on a logarithmic frequency axis), Nichols and Nyquist, on tabs of one window. The frequency range is picked automatically from the poles and zeros (two decades below the slowest, two above the fastest). A **K slider** moves the curves live, and a corner panel shows the gain and phase margins (ω_t, γ_k, ω_-π, m_k, K_critic) plus three closed-loop verdicts that must agree: the margins, the Nyquist encirclement count, and Routh-Hurwitz.
 - **Numbered axes** — every plot has a grid and tick labels at round values (1, 2, 5 × a power of ten) that follow the view as you pan and zoom.
 - **Two ways to run it** — a point-and-click GUI (no console at all) for quick use, or a console menu for anyone who'd rather type values at a prompt.
 
@@ -68,7 +69,14 @@ Set the simulation length and time step...
 
 <img src="assets/screenshots/step-response-plot.png" width="500">
 
-...then see y(t) plotted. (Impulse response follows the same two screens.)
+...then see y(t) plotted.
+
+### Impulse response
+
+<img src="assets/screenshots/impulse-response-plot.png" width="500">
+
+Impulse response follows the same two screens as the step response: the same
+setup screen, then y(t) plotted with the same auto-fit, pan and zoom.
 
 ### Root locus
 
@@ -78,6 +86,27 @@ The closed-loop pole trajectories for K in [0, Kmax], with a draggable
 slider that moves K and redraws the current closed-loop poles live —
 color-coded green/red for stable/unstable as you cross a stability
 boundary.
+
+### Frequency response
+
+<img src="assets/screenshots/bode-viewer.png" width="500">
+
+Bode magnitude and phase on a logarithmic frequency axis. The frequency range
+is picked automatically from the poles and zeros, and the K slider moves the
+curve live. The corner panel lists the crossover frequencies and margins
+(ω_t, γ_k, ω_-π, m_k, K_critic), marked on the plots, plus three closed-loop
+verdicts: from the margins, from counting the Nyquist encirclements, and from
+Routh-Hurwitz.
+
+<img src="assets/screenshots/nichols-viewer.png" width="500">
+
+The same data as Nichols (phase on x, magnitude in dB on y). The critical point
+is (−180°, 0 dB); γ_k is the horizontal distance to it and m_k the vertical one.
+
+<img src="assets/screenshots/nyquist-viewer.png" width="500">
+
+And as Nyquist, in the complex plane, with the unit circle and the critical
+point −1. Switch between the three views with the tabs or the keys 1 / 2 / 3.
 
 ### The console alternative
 
@@ -98,8 +127,8 @@ boundary.
 Control-Systems-Visualization-Tool
 ├── include/
 │   ├── math/      # ComplexNumber, Matrix, Polynomial
-│   ├── control/   # TransferFunction, StateSpace, Conversions, Stability, RootLocus, TimeResponse
-│   └── view/      # Plot, Slider, Button, TextField, Font, RootLocusWindow, TimeResponseWindow, LauncherWindow
+│   ├── control/   # TransferFunction, StateSpace, Conversions, Stability, RootLocus, TimeResponse, FrequencyResponse
+│   └── view/      # Plot, Slider, Button, TextField, Font, RootLocusWindow, TimeResponseWindow, FrequencyWindow, LauncherWindow
 ├── src/           # mirrors include/, plus the two entry points:
 │   ├── main.cpp       # console menu           -> main.exe
 │   └── main_gui.cpp   # point-and-click launcher, no console -> gui.exe
@@ -109,7 +138,7 @@ Control-Systems-Visualization-Tool
 ```
 
 - **math/** — general-purpose linear algebra and polynomial root-finding (Durand-Kerner). No control-theory knowledge lives here.
-- **control/** — the actual control-systems algorithms: Routh-Hurwitz stability, root locus (with branch identity tracking via the Hungarian algorithm), time-response simulation (RK4), and the two representation conversions.
+- **control/** — the actual control-systems algorithms: Routh-Hurwitz stability, root locus (with branch identity tracking via the Hungarian algorithm), time-response simulation (RK4), frequency response (log-spaced grid, phase unwrapping, margins found by bracketing + bisection on the computed samples, Nyquist encirclement counting), and the two representation conversions.
 - **view/** — everything SFML-specific: a reusable `Plot` (world↔screen mapping, pan/zoom, grid and numbered axes, clipping to its frame), `Button` / `TextField` / `Slider` widgets, and the windows built from them (`LauncherWindow` is the whole point-and-click app; `RootLocusWindow` and `TimeResponseWindow` are the plot windows both entry points share).
 
 ## Getting Started
