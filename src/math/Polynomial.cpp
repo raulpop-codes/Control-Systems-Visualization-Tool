@@ -37,7 +37,7 @@ vector<double> Polynomial::coefficientsDescending() const {
 
 
 // s^3 + 2s^2 + 6s + 3 = s^2 * ( s + 2) + 6s + 3 = 
-// s * (s (*(s + 2) + 6 ) + 3    =>  s * last_result + Coefficient_descending_order
+// s * (s *(s* (0 + 2) + 6 ) + 3    =>  s * last_result + Coefficient_descending_order
 // a0 + s * (a1 + s * (a2 + s * (...)))
 ComplexNumber Polynomial::evaluate(const ComplexNumber& s) const {
     ComplexNumber result(0.0, 0.0);
@@ -109,6 +109,11 @@ vector<ComplexNumber> Polynomial::roots(int maxIterations, double tol) const {
             for(int j = 0; j < n; j++){
                 if(j != i) denom = denom * (z[i] - z[j]);
             }
+            // Repeated roots: two approximations that have already met at the
+            // same root make (z[i]-z[j]) ~ 0, so denom ~ 0 and the division
+            // would throw. That root has converged as far as it can, so this
+            // step is skipped for it instead of dividing.
+            if(denom.magnitude() < 1e-6) continue;
             ComplexNumber newZ = z[i] - evaluate(z[i]) / denom;
             maxChange = max(maxChange, (newZ - z[i]).magnitude());
             z[i] = newZ;

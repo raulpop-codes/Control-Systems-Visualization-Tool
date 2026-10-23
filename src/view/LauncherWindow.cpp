@@ -1,6 +1,7 @@
 #include "view/LauncherWindow.hpp"
 #include "view/Button.hpp"
 #include "view/TextField.hpp"
+#include "view/Font.hpp"
 #include "view/RootLocusWindow.hpp"
 #include "view/TimeResponseWindow.hpp"
 
@@ -35,19 +36,6 @@ constexpr float CENTER_X = WINDOW_W / 2.0f;
 // of poles" is already the working assumption elsewhere in this codebase
 // (see RootLocus.cpp) -- anything a student would actually type in.
 constexpr int MAX_ORDER = 6;
-
-sf::Font loadFont() {
-    sf::Font font;
-    const char* candidates[] = {
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf"
-    };
-    for(const char* path : candidates){
-        if(font.openFromFile(path)) return font;
-    }
-    return font;
-}
 
 // Parses a field's text strictly -- throws instead of silently defaulting
 // to 0, so a typo in one matrix cell doesn't quietly build the wrong

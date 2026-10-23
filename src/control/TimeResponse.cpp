@@ -28,9 +28,18 @@ vector<ResponseSample> TimeResponse::simulate(const StateSpace& ss, double tFina
         Matrix y = C * x; // 1x1
         samples.push_back({ t, y.at(0, 0) + D * u });
 
-        // Forward Euler: x_{k+1} = x_k + dt * (A*x_k + B*u)
-        Matrix xDot = A * x + B * u;
-        x = x + xDot * dt;
+        // RK4 for x' = f(x) = A*x + B*u. The input u is constant over a
+        // step (0 or 1), so it's the same in all four slope samples:
+        //   k1 = f(x_k)
+        //   k2 = f(x_k + dt/2 * k1)
+        //   k3 = f(x_k + dt/2 * k2)
+        //   k4 = f(x_k + dt   * k3)
+        //   x_{k+1} = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+        Matrix k1 = A * x + B * u;
+        Matrix k2 = A * (x + k1 * (dt / 2.0)) + B * u;
+        Matrix k3 = A * (x + k2 * (dt / 2.0)) + B * u;
+        Matrix k4 = A * (x + k3 * dt) + B * u;
+        x = x + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * (dt / 6.0);
     }
     return samples;
 }

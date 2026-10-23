@@ -15,6 +15,10 @@ private:
     float pixelX, pixelY, pixelWidth, pixelHeight;
     double worldXMin, worldXMax, worldYMin, worldYMax;
 
+    // State of the click-and-drag in progress (see handleEvent).
+    bool dragging;
+    sf::Vector2f lastMouse;
+
 public:
     Plot(float pixelX, float pixelY, float pixelWidth, float pixelHeight,
          double worldXMin, double worldXMax, double worldYMin, double worldYMax);
@@ -49,7 +53,26 @@ public:
     // the original autofit bounds after the user's panned/zoomed away.
     void setWorldBounds(double xMin, double xMax, double yMin, double yMax);
 
+    // Click-and-drag to pan, scroll wheel to zoom around the cursor. Both
+    // only start inside this plot's rectangle, so they don't fight with a
+    // slider or button elsewhere in the window. The tick labels follow the
+    // view automatically, since they're recomputed from the world bounds
+    // every frame. Returns true if the view changed.
+    bool handleEvent(const sf::Event& event, sf::RenderWindow& window);
+
+    // SFML only clips drawing to the window, not to this plot's rectangle,
+    // so a curve that runs off the edge would be drawn across the tick
+    // labels and whatever sits around the plot. Everything inside the plot
+    // (grid, axes, curves, markers) goes between beginClip() and endClip().
+    void beginClip(sf::RenderWindow& window) const;
+    void endClip(sf::RenderWindow& window) const;
+
     void drawFrame(sf::RenderWindow& window) const;
+    // Faint grid lines at the same "round" values drawTickLabels() numbers.
+    void drawGrid(sf::RenderWindow& window) const;
+    // Tick marks and numbers along the bottom (x) and left (y) edges of the
+    // frame. Call after endClip(), since the labels sit outside the frame.
+    void drawTickLabels(sf::RenderWindow& window, const sf::Font* font) const;
     void drawAxes(sf::RenderWindow& window) const;
     void drawLine(sf::RenderWindow& window, sf::Vector2f a, sf::Vector2f b, sf::Color color) const;
 

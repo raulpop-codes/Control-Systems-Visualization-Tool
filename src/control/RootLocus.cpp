@@ -9,28 +9,64 @@ using namespace std;
 
 RootLocus::RootLocus(const TransferFunction& openLoopPlant) : plant(openLoopPlant) {}
 
+// Reorders `current` so that current[i] is the pole that best matches
+// target[i], minimizing the TOTAL distance over all pairings.
+//
+// Trying every ordering (next_permutation) does exactly that but costs n!
+// per sample, and compute() calls this thousands of times. The Hungarian
+// algorithm finds the same optimal assignment in O(n^3): it keeps a
+// "potential" u[i] for every target and v[j] for every candidate pole such
+// that u[i] + v[j] <= cost(i, j) always holds, and pairs i with j only where
+// that is tight (equality) -- any complete pairing made of tight edges is
+// optimal, because no pairing can beat the sum of the potentials. Each
+// round adds one target, growing an alternating path of tight edges and,
+// when it gets stuck, lowering u / raising v by the smallest slack delta to
+// make a new edge tight. Indices below are 1-based, with 0 as a dummy
+// "no one yet" slot, which keeps the loops free of special cases.
 static vector<ComplexNumber> reorderToMatchTarget(const vector<ComplexNumber>& current,
                                                     const vector<ComplexNumber>& target) {
     int n = static_cast<int>(current.size());
-    vector<int> indices(n);
-    for(int i = 0; i < n; i++) indices[i] = i;
+    const double inf = numeric_limits<double>::max();
 
-    vector<int> bestOrder = indices;
-    double bestCost = numeric_limits<double>::max();
+    vector<double> u(n + 1, 0.0), v(n + 1, 0.0);
+    vector<int> owner(n + 1, 0);  // owner[j] = target currently paired with candidate j
+    vector<int> way(n + 1, 0);    // way[j] = previous candidate on the path that reached j
 
-    do {
-        double cost = 0.0;
-        for(int i = 0; i < n; i++){
-            cost += (current[indices[i]] - target[i]).magnitude();
-        }
-        if(cost < bestCost){
-            bestCost = cost;
-            bestOrder = indices;
-        }
-    } while(next_permutation(indices.begin(), indices.end()));
+    for(int i = 1; i <= n; i++){
+        owner[0] = i;
+        int j0 = 0;
+        vector<double> minSlack(n + 1, inf);
+        vector<bool> used(n + 1, false);
+
+        do {
+            used[j0] = true;
+            int i0 = owner[j0];
+            double delta = inf;
+            int j1 = 0;
+            for(int j = 1; j <= n; j++){
+                if(used[j]) continue;
+                double cost = (current[j - 1] - target[i0 - 1]).magnitude();
+                double slack = cost - u[i0] - v[j];
+                if(slack < minSlack[j]){ minSlack[j] = slack; way[j] = j0; }
+                if(minSlack[j] < delta){ delta = minSlack[j]; j1 = j; }
+            }
+            for(int j = 0; j <= n; j++){
+                if(used[j]){ u[owner[j]] += delta; v[j] -= delta; }
+                else        minSlack[j] -= delta;
+            }
+            j0 = j1;
+        } while(owner[j0] != 0);
+
+        // Walk the path back, flipping who owns each candidate along it.
+        do {
+            int j1 = way[j0];
+            owner[j0] = owner[j1];
+            j0 = j1;
+        } while(j0 != 0);
+    }
 
     vector<ComplexNumber> result(n);
-    for(int i = 0; i < n; i++) result[i] = current[bestOrder[i]];
+    for(int j = 1; j <= n; j++) result[owner[j] - 1] = current[j - 1];
     return result;
 }
 

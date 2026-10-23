@@ -9,8 +9,7 @@
 #include "control/StateSpace.hpp"
 #include "control/Conversions.hpp"
 #include "control/TimeResponse.hpp"
-
-#define M_PI 3.141592
+#include "math/Constants.hpp"
 
 using namespace std;
 
@@ -97,7 +96,7 @@ int main() {
     for (double c : backToTf.denominator().coefficients()) cout << c << " ";
     cout << "\n";
 
-    cout << "\n=== TimeResponse (Euler) vs analytical, H(s)=1/(s+1) ===\n";
+    cout << "\n=== TimeResponse (RK4) vs analytical, H(s)=1/(s+1) ===\n";
     Matrix Af(1,1); Af.at(0,0) = -1;
     Matrix Bf(1,1); Bf.at(0,0) = 1;
     Matrix Cf(1,1); Cf.at(0,0) = 1;
@@ -108,6 +107,11 @@ int main() {
     int idxAt2 = 2000; // t = 2.0 at dt = 0.001
     cout << "step at t=2 (expect ~" << (1.0 - exp(-2.0)) << "): " << stepSamples[idxAt2].y << "\n";
     cout << "impulse at t=2 (expect ~" << exp(-2.0) << "): " << impulseSamples[idxAt2].y << "\n";
+
+    // A step 100x coarser: forward Euler would be off in the 2nd decimal
+    // here (about 0.8784 instead of 0.8647); RK4 stays accurate.
+    auto coarseSamples = TimeResponse::step(firstOrder, 3.0, 0.1);
+    cout << "step at t=2, dt=0.1 (expect ~" << (1.0 - exp(-2.0)) << "): " << coarseSamples[20].y << "\n";
 
     return 0;
 }

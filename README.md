@@ -12,8 +12,9 @@ Built alongside a university Control Systems course, following specific techniqu
 
 - **Two system representations** — describe a system as state-space matrices (A, B, C, D) or as transfer function coefficients, and convert freely between the two (Faddeev-LeVerrier / Controllable Canonical Form).
 - **Stability analysis** — full Routh-Hurwitz table, right-half-plane root count, and a stable / marginally-stable / unstable verdict.
-- **Interactive root locus** — branches are tracked by predictive extrapolation as K sweeps, so they don't swap identity near breakaway/break-in points; a live K slider shows the current closed-loop poles and stability in real time. The view **auto-fits** to the system's poles and zeros, and you can **drag to pan**, **scroll to zoom**, and hit **Reset view** to snap back.
-- **Step and impulse response** — numerically simulated from the state-space model and plotted as a time-domain graph.
+- **Interactive root locus** — branches are tracked by predictive extrapolation as K sweeps, so they don't swap identity near breakaway/break-in points; a live K slider shows the current closed-loop poles and stability in real time. The view **auto-fits** to the system's poles and zeros (even when they are orders of magnitude apart), and you can **drag to pan**, **scroll to zoom**, and hit **Reset view** to snap back.
+- **Step and impulse response** — numerically simulated from the state-space model (fourth-order Runge-Kutta) and plotted as a time-domain graph, with the same auto-fit, pan and zoom.
+- **Numbered axes** — every plot has a grid and tick labels at round values (1, 2, 5 × a power of ten) that follow the view as you pan and zoom.
 - **Two ways to run it** — a point-and-click GUI (no console at all) for quick use, or a console menu for anyone who'd rather type values at a prompt.
 
 ## Walkthrough
@@ -98,7 +99,7 @@ Control-Systems-Visualization-Tool
 ├── include/
 │   ├── math/      # ComplexNumber, Matrix, Polynomial
 │   ├── control/   # TransferFunction, StateSpace, Conversions, Stability, RootLocus, TimeResponse
-│   └── view/      # Plot, Slider, Button, TextField, RootLocusWindow, TimeResponseWindow, LauncherWindow
+│   └── view/      # Plot, Slider, Button, TextField, Font, RootLocusWindow, TimeResponseWindow, LauncherWindow
 ├── src/           # mirrors include/, plus the two entry points:
 │   ├── main.cpp       # console menu           -> main.exe
 │   └── main_gui.cpp   # point-and-click launcher, no console -> gui.exe
@@ -108,8 +109,8 @@ Control-Systems-Visualization-Tool
 ```
 
 - **math/** — general-purpose linear algebra and polynomial root-finding (Durand-Kerner). No control-theory knowledge lives here.
-- **control/** — the actual control-systems algorithms: Routh-Hurwitz stability, root locus (with branch identity tracking), time-response simulation, and the two representation conversions.
-- **view/** — everything SFML-specific: a reusable `Plot` (world↔screen mapping, pan/zoom), `Button` / `TextField` / `Slider` widgets, and the windows built from them (`LauncherWindow` is the whole point-and-click app; `RootLocusWindow` and `TimeResponseWindow` are the plot windows both entry points share).
+- **control/** — the actual control-systems algorithms: Routh-Hurwitz stability, root locus (with branch identity tracking via the Hungarian algorithm), time-response simulation (RK4), and the two representation conversions.
+- **view/** — everything SFML-specific: a reusable `Plot` (world↔screen mapping, pan/zoom, grid and numbered axes, clipping to its frame), `Button` / `TextField` / `Slider` widgets, and the windows built from them (`LauncherWindow` is the whole point-and-click app; `RootLocusWindow` and `TimeResponseWindow` are the plot windows both entry points share).
 
 ## Getting Started
 

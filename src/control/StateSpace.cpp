@@ -22,10 +22,8 @@ const Matrix& StateSpace::getB() const { return B; }
 const Matrix& StateSpace::getC() const { return C; }
 const Matrix& StateSpace::getD() const { return D; }
 
-Polynomial StateSpace::characteristicPolynomial(vector<Matrix>* adjugateCoeffs) const {
-    int n = order();
 
-    // Faddeev-LeVerrier (sign convention verified by hand against a known
+// Faddeev-LeVerrier (sign convention verified by hand against a known
     // companion matrix -- see the note in StateSpace.hpp):
     //   M_0 = I
     //   for k = 1..n:
@@ -33,6 +31,9 @@ Polynomial StateSpace::characteristicPolynomial(vector<Matrix>* adjugateCoeffs) 
     //       M_k = A*M_{k-1} - c_k*I
     // p(s) = s^n - c_1*s^(n-1) - c_2*s^(n-2) - ... - c_n
     // adj(sI-A) = M_0*s^(n-1) + M_1*s^(n-2) + ... + M_(n-1)
+Polynomial StateSpace::characteristicPolynomial(vector<Matrix>* adjugateCoeffs) const {
+    int n = order();
+
     vector<Matrix> M;
     M.reserve(n);
     vector<double> c(n + 1, 0.0);

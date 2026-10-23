@@ -1,12 +1,16 @@
 #include "view/Plot.hpp"
 #include <cmath>
+#include <sstream>
+#include <iomanip>
+#include <string>
 
 using namespace std;
 
 Plot::Plot(float px, float py, float pw, float ph,
            double xMin, double xMax, double yMin, double yMax)
     : pixelX(px), pixelY(py), pixelWidth(pw), pixelHeight(ph),
-      worldXMin(xMin), worldXMax(xMax), worldYMin(yMin), worldYMax(yMax) {}
+      worldXMin(xMin), worldXMax(xMax), worldYMin(yMin), worldYMax(yMax),
+      dragging(false), lastMouse{} {}
 
 sf::Vector2f Plot::toScreen(double worldX, double worldY) const {
     float fx = static_cast<float>((worldX - worldXMin) / (worldXMax - worldXMin));
@@ -68,6 +72,135 @@ double Plot::getWorldYMax() const { return worldYMax; }
 
 void Plot::setWorldBounds(double xMin, double xMax, double yMin, double yMax) {
     worldXMin = xMin; worldXMax = xMax; worldYMin = yMin; worldYMax = yMax;
+}
+
+bool Plot::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
+    sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+
+    if(const auto* mousePress = event.getIf<sf::Event::MouseButtonPressed>()){
+        if(mousePress->button == sf::Mouse::Button::Left && containsScreenPoint(mouse)){
+            dragging = true;
+            lastMouse = mouse;
+        }
+    } else if(const auto* mouseRelease = event.getIf<sf::Event::MouseButtonReleased>()){
+        if(mouseRelease->button == sf::Mouse::Button::Left){
+            dragging = false;
+        }
+    } else if(event.is<sf::Event::MouseMoved>()){
+        if(dragging){
+            pan(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
+            lastMouse = mouse;
+            return true;
+        }
+    } else if(const auto* wheel = event.getIf<sf::Event::MouseWheelScrolled>()){
+        if(containsScreenPoint(mouse)){
+            double factor = wheel->delta > 0.0f ? 0.9 : (1.0 / 0.9);
+            zoom(factor, mouse);
+            return true;
+        }
+    }
+    return false;
+}
+
+// A view covering exactly this plot's pixel rectangle, with its viewport set
+// to the same rectangle (as fractions of the window): the world->pixel
+// numbers from toScreen() stay valid unchanged, but anything outside the
+// rectangle falls outside the view and is cut off.
+void Plot::beginClip(sf::RenderWindow& window) const {
+    sf::Vector2f full = window.getDefaultView().getSize();
+    sf::View view(sf::FloatRect({pixelX, pixelY}, {pixelWidth, pixelHeight}));
+    view.setViewport(sf::FloatRect({pixelX / full.x, pixelY / full.y},
+                                    {pixelWidth / full.x, pixelHeight / full.y}));
+    window.setView(view);
+}
+
+void Plot::endClip(sf::RenderWindow& window) const {
+    window.setView(window.getDefaultView());
+}
+
+// Picks a "round" tick spacing -- 1, 2 or 5 times a power of ten -- that
+// puts roughly targetTicks ticks across a span, so the numbers on the axes
+// read 0, 2, 4, 6 ... instead of 0, 1.7, 3.4 ... at any zoom level.
+static double niceStep(double span, double targetTicks) {
+    double raw = span / targetTicks;
+    double magnitude = pow(10.0, floor(log10(raw)));
+    double fraction = raw / magnitude; // in [1, 10)
+    double nice = fraction < 1.5 ? 1.0 : fraction < 3.5 ? 2.0 : fraction < 7.5 ? 5.0 : 10.0;
+    return nice * magnitude;
+}
+
+static string formatTick(double value, double step) {
+    if(fabs(value) < step * 1e-6) value = 0.0; // rounding noise would print "-0"
+    ostringstream out;
+    out << setprecision(6) << value;
+    return out.str();
+}
+
+// The tick loops below are capped at this many ticks per axis: niceStep()
+// only aims for ~10, but a view panned absurdly far from the origin (where
+// (first + n) * step stops changing as n grows) could otherwise loop forever.
+static const int MAX_TICKS = 100;
+
+void Plot::drawGrid(sf::RenderWindow& window) const {
+    double spanX = worldXMax - worldXMin;
+    double spanY = worldYMax - worldYMin;
+    if(!(spanX > 0.0) || !(spanY > 0.0) || !isfinite(spanX) || !isfinite(spanY)) return;
+
+    sf::Color gridColor(40, 40, 48);
+    double stepX = niceStep(spanX, pixelWidth / 90.0);
+    double stepY = niceStep(spanY, pixelHeight / 60.0);
+
+    double firstX = ceil(worldXMin / stepX);
+    for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
+        double x = (firstX + n) * stepX;
+        drawLine(window, toScreen(x, worldYMin), toScreen(x, worldYMax), gridColor);
+    }
+    double firstY = ceil(worldYMin / stepY);
+    for(int n = 0; n < MAX_TICKS && (firstY + n) * stepY <= worldYMax; n++){
+        double y = (firstY + n) * stepY;
+        drawLine(window, toScreen(worldXMin, y), toScreen(worldXMax, y), gridColor);
+    }
+}
+
+void Plot::drawTickLabels(sf::RenderWindow& window, const sf::Font* font) const {
+    double spanX = worldXMax - worldXMin;
+    double spanY = worldYMax - worldYMin;
+    if(!(spanX > 0.0) || !(spanY > 0.0) || !isfinite(spanX) || !isfinite(spanY)) return;
+
+    sf::Color tickColor(150, 150, 160);
+    double stepX = niceStep(spanX, pixelWidth / 90.0);
+    double stepY = niceStep(spanY, pixelHeight / 60.0);
+    float bottom = pixelY + pixelHeight;
+
+    double firstX = ceil(worldXMin / stepX);
+    for(int n = 0; n < MAX_TICKS && (firstX + n) * stepX <= worldXMax; n++){
+        double x = (firstX + n) * stepX;
+        float screenX = toScreen(x, worldYMin).x;
+        drawLine(window, sf::Vector2f(screenX, bottom), sf::Vector2f(screenX, bottom + 4.0f), tickColor);
+        if(font != nullptr){
+            sf::Text text(*font, formatTick(x, stepX), 12);
+            sf::FloatRect b = text.getLocalBounds();
+            text.setOrigin({b.position.x + b.size.x / 2.0f, 0.0f}); // centered under the tick
+            text.setPosition({screenX, bottom + 6.0f});
+            text.setFillColor(tickColor);
+            window.draw(text);
+        }
+    }
+
+    double firstY = ceil(worldYMin / stepY);
+    for(int n = 0; n < MAX_TICKS && (firstY + n) * stepY <= worldYMax; n++){
+        double y = (firstY + n) * stepY;
+        float screenY = toScreen(worldXMin, y).y;
+        drawLine(window, sf::Vector2f(pixelX - 4.0f, screenY), sf::Vector2f(pixelX, screenY), tickColor);
+        if(font != nullptr){
+            sf::Text text(*font, formatTick(y, stepY), 12);
+            sf::FloatRect b = text.getLocalBounds();
+            text.setOrigin({b.position.x + b.size.x, b.position.y + b.size.y / 2.0f}); // right-aligned, centered on the tick
+            text.setPosition({pixelX - 8.0f, screenY});
+            text.setFillColor(tickColor);
+            window.draw(text);
+        }
+    }
 }
 
 void Plot::drawFrame(sf::RenderWindow& window) const {

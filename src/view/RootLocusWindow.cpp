@@ -4,29 +4,16 @@
 #include "view/Plot.hpp"
 #include "view/Slider.hpp"
 #include "view/Button.hpp"
+#include "view/Font.hpp"
 
 #include <SFML/Graphics.hpp>
 #include <algorithm>
-#include <iostream>
+#include <cmath>
 #include <limits>
 #include <sstream>
 #include <vector>
 
 using namespace std;
-
-static sf::Font loadFont() {
-    sf::Font font;
-    const char* candidates[] = {
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf"
-    };
-    for(const char* path : candidates){
-        if(font.openFromFile(path)) return font;
-    }
-    cerr << "Warning: no font found, labels will not be drawn.\n";
-    return font;
-}
 
 // Picks a view window around the open-loop poles and zeros -- those are
 // the fixed landmarks of the system -- with generous padding to also show
@@ -38,14 +25,21 @@ static sf::Font loadFont() {
 // by K=5), so fitting the whole sweep would zoom the view out to something
 // nearly useless just to chase one branch's tail. Instead, that branch is
 // simply left to run off the edge of the plot, same as any textbook root
-// locus figure -- SFML clips drawing to the window automatically, so nothing
-// breaks, it just exits the frame.
-static void computeViewBounds(const TransferFunction& plant,
+// locus figure -- Plot::beginClip() cuts the drawing at the frame, so
+// nothing breaks, it just exits the frame.
+//
+// plotAspect is the plot's pixel width / pixel height. The fit keeps the same
+// number of pixels per unit on the real and imaginary axes (so angles, like
+// the asymptotes', look like angles), which also means poles/zeros spread
+// very far along one axis can't squash the other into a thin strip: the
+// view just grows on both axes until everything is on screen.
+static void computeViewBounds(const TransferFunction& plant, double plotAspect,
                                double& xMin, double& xMax, double& yMin, double& yMax) {
     double reMin = numeric_limits<double>::max(), reMax = numeric_limits<double>::lowest();
     double imMin = numeric_limits<double>::max(), imMax = numeric_limits<double>::lowest();
 
     auto expand = [&](const ComplexNumber& z) {
+        if(!isfinite(z.getReal()) || !isfinite(z.getImag())) return; // a root that failed to converge
         reMin = min(reMin, z.getReal());
         reMax = max(reMax, z.getReal());
         imMin = min(imMin, z.getImag());
@@ -69,10 +63,18 @@ static void computeViewBounds(const TransferFunction& plant,
     double imCenter = (imMax + imMin) / 2.0;
 
     const double padding = 0.6; // 60% extra room on each side
-    xMin = reCenter - reSpan * (0.5 + padding);
-    xMax = reCenter + reSpan * (0.5 + padding);
-    yMin = imCenter - imSpan * (0.5 + padding);
-    yMax = imCenter + imSpan * (0.5 + padding);
+    double width  = reSpan * (1.0 + 2.0 * padding);
+    double height = imSpan * (1.0 + 2.0 * padding);
+
+    // Equal scale: whichever axis is the tighter fit gets widened until the
+    // view has the plot's own shape.
+    if(width < height * plotAspect) width = height * plotAspect;
+    else                            height = width / plotAspect;
+
+    xMin = reCenter - width / 2.0;
+    xMax = reCenter + width / 2.0;
+    yMin = imCenter - height / 2.0;
+    yMax = imCenter + height / 2.0;
 }
 
 void showRootLocusPlot(const TransferFunction& plant, double kMax, double initialK) {
@@ -84,23 +86,22 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
     vector<RootLocusPoint> locus = rootLocus.compute(kMax, 3000); // precomputed once
 
     double xMin, xMax, yMin, yMax;
-    computeViewBounds(plant, xMin, xMax, yMin, yMax);
+    computeViewBounds(plant, 800.0 / 500.0, xMin, xMax, yMin, yMax);
     Plot plot(50.0f, 50.0f, 800.0f, 500.0f, xMin, xMax, yMin, yMax);
     Slider slider(50.0f, 610.0f, 800.0f, 0.0, kMax, initialK);
     Button resetViewButton(760.0f, 15.0f, 90.0f, 28.0f, "Reset view");
 
-    // Click-and-drag to pan, scroll wheel to zoom -- both scoped to the
-    // plot's own rectangle so they don't fight with dragging the K slider
-    // just below it. See computeViewBounds()'s comment for why the initial
-    // fit deliberately doesn't chase every far-off locus branch: this is
-    // how you get to them anyway, without permanently zooming everyone
-    // else out to make room.
-    bool dragging = false;
-    sf::Vector2f lastMouse{};
+    // Click-and-drag to pan, scroll wheel to zoom (Plot::handleEvent) -- both
+    // scoped to the plot's own rectangle so they don't fight with dragging
+    // the K slider just below it. See computeViewBounds()'s comment for why
+    // the initial fit deliberately doesn't chase every far-off locus branch:
+    // this is how you get to them anyway, without permanently zooming
+    // everyone else out to make room.
 
     // Group closed-loop poles into branches by index: locus[i].poles[b] is
-    // one point on branch b. Works because RootLocus::compute keeps the
-    // same pole ordering from Durand-Kerner across neighboring k values.
+    // one point on branch b. Works because RootLocus::compute reorders each
+    // sample's poles to match the previous ones (reorderToMatchTarget), so
+    // index b follows the same branch across neighboring k values.
     size_t branchCount = locus.empty() ? 0 : locus[0].poles.size();
 
     vector<ComplexNumber> currentPoles = plant.closedLoopPoles(slider.getValue());
@@ -121,33 +122,14 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
                 plot.setWorldBounds(xMin, xMax, yMin, yMax);
             }
 
-            sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-
-            if(const auto* mousePress = event->getIf<sf::Event::MouseButtonPressed>()){
-                if(mousePress->button == sf::Mouse::Button::Left && plot.containsScreenPoint(mouse)){
-                    dragging = true;
-                    lastMouse = mouse;
-                }
-            } else if(const auto* mouseRelease = event->getIf<sf::Event::MouseButtonReleased>()){
-                if(mouseRelease->button == sf::Mouse::Button::Left){
-                    dragging = false;
-                }
-            } else if(event->is<sf::Event::MouseMoved>()){
-                if(dragging){
-                    plot.pan(mouse.x - lastMouse.x, mouse.y - lastMouse.y);
-                    lastMouse = mouse;
-                }
-            } else if(const auto* wheel = event->getIf<sf::Event::MouseWheelScrolled>()){
-                if(plot.containsScreenPoint(mouse)){
-                    double factor = wheel->delta > 0.0f ? 0.9 : (1.0 / 0.9);
-                    plot.zoom(factor, mouse);
-                }
-            }
+            plot.handleEvent(*event, window);
         }
 
         window.clear(sf::Color(15, 15, 20));
 
         plot.drawFrame(window);
+        plot.beginClip(window);
+        plot.drawGrid(window);
         plot.drawAxes(window);
 
         for(size_t b = 0; b < branchCount; b++){
@@ -162,6 +144,9 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
         sf::Color poleColor = currentlyStable ? sf::Color(255, 230, 90) : sf::Color(255, 80, 80);
         for(auto& p : currentPoles) plot.drawFilledMarker(window, p, poleColor);
 
+        plot.endClip(window);
+        plot.drawTickLabels(window, &font);
+
         slider.draw(window, &font);
         resetViewButton.draw(window, &font);
 
@@ -173,9 +158,20 @@ void showRootLocusPlot(const TransferFunction& plant, double kMax, double initia
         window.draw(text);
 
         sf::Text hint(font, "Drag to pan, scroll to zoom", 12);
-        hint.setPosition(sf::Vector2f{760.0f, 46.0f});
+        hint.setPosition(sf::Vector2f{575.0f, 22.0f});
         hint.setFillColor(sf::Color(140, 140, 150));
         window.draw(hint);
+
+        // Axis names: the plot is the complex plane.
+        sf::Text reLabel(font, "Re", 13);
+        reLabel.setPosition(sf::Vector2f{835.0f, 574.0f});
+        reLabel.setFillColor(sf::Color(170, 200, 240));
+        window.draw(reLabel);
+
+        sf::Text imLabel(font, "Im", 13);
+        imLabel.setPosition(sf::Vector2f{14.0f, 30.0f});
+        imLabel.setFillColor(sf::Color(170, 200, 240));
+        window.draw(imLabel);
 
         window.display();
     }
