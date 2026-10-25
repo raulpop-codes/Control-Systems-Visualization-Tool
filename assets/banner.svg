@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B2018"/>
+      <stop offset="55%" stop-color="#113524"/>
+      <stop offset="100%" stop-color="#0D2B1F"/>
+    </linearGradient>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.4" fill="#3FB27F" fill-opacity="0.16"/>
+    </pattern>
+    <clipPath id="clip"><rect width="1200" height="320" rx="16"/></clipPath>
+    <marker id="cs-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3FB27F" fill-opacity="0.55"/>
+    </marker>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect width="1200" height="320" fill="url(#bg)"/>
+    <rect width="1200" height="320" fill="url(#dots)"/>
+
+    <!-- root locus art -->
+    <g>
+      <path d="M 880 170 H 1165" stroke="#2A7D5A" stroke-width="1.4" stroke-opacity="0.55"/>
+      <path d="M 1015 62 V 278" stroke="#2A7D5A" stroke-width="1.4" stroke-opacity="0.55"/>
+
+      <path d="M 922 170 H 982" stroke="#3FB27F" stroke-width="2.6" stroke-opacity="0.5" stroke-linecap="round"/>
+      <path d="M 1062 170 H 1122" stroke="#3FB27F" stroke-width="2.6" stroke-opacity="0.5" stroke-linecap="round"/>
+
+      <path d="M 982 170 C 982 138, 998 106, 1034 94 C 1070 82, 1106 84, 1142 96"
+            stroke="#3FB27F" stroke-width="2.6" stroke-opacity="0.5" stroke-linecap="round" marker-end="url(#cs-ar)"/>
+      <path d="M 982 170 C 982 202, 998 234, 1034 246 C 1070 258, 1106 256, 1142 244"
+            stroke="#3FB27F" stroke-width="2.6" stroke-opacity="0.5" stroke-linecap="round" marker-end="url(#cs-ar)"/>
+      <circle cx="982" cy="170" r="3.5" fill="#3FB27F" fill-opacity="0.65"/>
+
+      <g stroke="#CFE9DC" stroke-opacity="0.45" stroke-width="2.2" stroke-linecap="round">
+        <path d="M 916 164 l 9 9 M 925 164 l -9 9"/>
+        <path d="M 976 164 l 9 9 M 985 164 l -9 9"/>
+        <path d="M 1056 164 l 9 9 M 1065 164 l -9 9"/>
+      </g>
+      <circle cx="1122" cy="170" r="5.5" stroke="#CFE9DC" stroke-opacity="0.45" stroke-width="2.2"/>
+    </g>
+
+    <rect x="80" y="68" width="64" height="4" rx="2" fill="#3FB27F"/>
+
+    <text x="80" y="140" font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#FFFFFF" letter-spacing="-1">Control Systems</text>
+    <text x="80" y="196" font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#3FB27F" letter-spacing="-1">Visualization Tool</text>
+
+    <text x="80" y="236" font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#8FBFA9">Stability, root locus and time/frequency response for linear systems</text>
+
+    <text x="80" y="272" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#5E9078" letter-spacing="0.5">C++17  &#183;  SFML 3  &#183;  Make  &#183;  no external math deps</text>
+
+    <rect x="0.75" y="0.75" width="1198.5" height="318.5" rx="16" stroke="#2A7D5A" stroke-opacity="0.5" stroke-width="1.5"/>
+  </g>
+</svg>
