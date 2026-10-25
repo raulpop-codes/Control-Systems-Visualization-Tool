@@ -1,174 +1,3 @@
-# Control Systems Visualization Tool
-
-**Stability, root locus and step/impulse response for linear control systems — C++17, SFML 3**
-
-A C++ desktop tool for analyzing and visualizing linear control systems — stability, root locus, and step/impulse response — without doing the linear algebra by hand.
-
-## Why this exists
-
-Built alongside a university Control Systems course, following specific techniques from the course's own guide: Faddeev-LeVerrier for the characteristic polynomial, Durand-Kerner for polynomial root-finding, Controllable Canonical Form for state-space realization, Routh-Hurwitz for stability. Doing this analysis by hand for anything past a 3rd-order system means grinding through matrix determinants, polynomial root-finding, and a Routh table just to answer "is this stable" or "what does the root locus look like as K grows" — and one wrong arithmetic step invalidates everything after it. This tool does the actual math instead of a lookup table or a canned example, and lets you *see* the result instead of squinting at a printed list of complex numbers.
-
-## Features
-
-- **Two system representations** — describe a system as state-space matrices (A, B, C, D) or as transfer function coefficients, and convert freely between the two (Faddeev-LeVerrier / Controllable Canonical Form).
-- **Stability analysis** — full Routh-Hurwitz table, right-half-plane root count, and a stable / marginally-stable / unstable verdict.
-- **Interactive root locus** — branches are tracked by predictive extrapolation as K sweeps, so they don't swap identity near breakaway/break-in points; a live K slider shows the current closed-loop poles and stability in real time. The view **auto-fits** to the system's poles and zeros (even when they are orders of magnitude apart), and you can **drag to pan**, **scroll to zoom**, and hit **Reset view** to snap back.
-- **Step and impulse response** — numerically simulated from the state-space model (fourth-order Runge-Kutta) and plotted as a time-domain graph, with the same auto-fit, pan and zoom.
-- **Frequency response** — Bode (magnitude and unwrapped phase on a logarithmic frequency axis), Nichols and Nyquist, on tabs of one window. The frequency range is picked automatically from the poles and zeros (two decades below the slowest, two above the fastest). A **K slider** moves the curves live, and a corner panel shows the gain and phase margins (ω_t, γ_k, ω_-π, m_k, K_critic) plus three closed-loop verdicts that must agree: the margins, the Nyquist encirclement count, and Routh-Hurwitz.
-- **Numbered axes** — every plot has a grid and tick labels at round values (1, 2, 5 × a power of ten) that follow the view as you pan and zoom.
-- **Two ways to run it** — a point-and-click GUI (no console at all) for quick use, or a console menu for anyone who'd rather type values at a prompt.
-
-## Walkthrough
-
-### Choosing how to describe the system
-
-<img src="assets/screenshots/choose-representation.png" width="500">
-
-Every analysis starts here: describe the system as state-space matrices,
-or as a transfer function's coefficients.
-
-### Transfer function input
-
-<img src="assets/screenshots/transfer-function-degrees.png" width="500">
-
-First pick the numerator/denominator degrees...
-
-<img src="assets/screenshots/tf-numerator-denominator.png" width="500">
-
-...then enter alpha(s) and beta(s) coefficient by coefficient.
-
-### State-space input
-
-<img src="assets/screenshots/state-space-order.png" width="500">
-
-For state-space, pick the system order n first...
-
-<img src="assets/screenshots/state-space-abcd.png" width="500">
-
-...then fill in A, B, C, and D.
-
-### Choose what to check
-
-<img src="assets/screenshots/main-menu.png" width="500">
-
-Once the system is built, pick an analysis. "New system" resets back to
-step 1 without closing the app.
-
-### Stability
-
-<img src="assets/screenshots/stability-result.png" width="500">
-
-Runs the Routh-Hurwitz table and reports the verdict (stable / marginally
-stable / unstable) along with the right-half-plane root count.
-
-### Step response
-
-<img src="assets/screenshots/step-response-setup.png" width="500">
-
-Set the simulation length and time step...
-
-<img src="assets/screenshots/step-response-plot.png" width="500">
-
-...then see y(t) plotted.
-
-### Impulse response
-
-<img src="assets/screenshots/impulse-response-plot.png" width="500">
-
-Impulse response follows the same two screens as the step response: the same
-setup screen, then y(t) plotted with the same auto-fit, pan and zoom.
-
-### Root locus
-
-<img src="assets/screenshots/root-locus-viewer.png" width="500">
-
-The closed-loop pole trajectories for K in [0, Kmax], with a draggable
-slider that moves K and redraws the current closed-loop poles live —
-color-coded green/red for stable/unstable as you cross a stability
-boundary.
-
-### Frequency response
-
-<img src="assets/screenshots/bode-viewer.png" width="500">
-
-Bode magnitude and phase on a logarithmic frequency axis. The frequency range
-is picked automatically from the poles and zeros, and the K slider moves the
-curve live. The corner panel lists the crossover frequencies and margins
-(ω_t, γ_k, ω_-π, m_k, K_critic), marked on the plots, plus three closed-loop
-verdicts: from the margins, from counting the Nyquist encirclements, and from
-Routh-Hurwitz.
-
-<img src="assets/screenshots/nichols-viewer.png" width="500">
-
-The same data as Nichols (phase on x, magnitude in dB on y). The critical point
-is (−180°, 0 dB); γ_k is the horizontal distance to it and m_k the vertical one.
-
-<img src="assets/screenshots/nyquist-viewer.png" width="500">
-
-And as Nyquist, in the complex plane, with the unit circle and the critical
-point −1. Switch between the three views with the tabs or the keys 1 / 2 / 3.
-
-### The console alternative
-
-`main.exe` offers the exact same analysis through a typed menu instead of buttons — useful for scripting, quick one-off checks, or just preference. Both entry points share the same underlying math and the same plot windows, so results are identical either way.
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Language | C++17 |
-| Graphics / UI | SFML 3 |
-| Build | Make (Makefile, g++) |
-| Target platform | Windows (MSYS2 / MinGW64) — plain g++ + SFML works elsewhere too |
-
-## Architecture
-
-```
-Control-Systems-Visualization-Tool
-├── include/
-│   ├── math/      # ComplexNumber, Matrix, Polynomial
-│   ├── control/   # TransferFunction, StateSpace, Conversions, Stability, RootLocus, TimeResponse, FrequencyResponse
-│   └── view/      # Plot, Slider, Button, TextField, Font, RootLocusWindow, TimeResponseWindow, FrequencyWindow, LauncherWindow
-├── src/           # mirrors include/, plus the two entry points:
-│   ├── main.cpp       # console menu           -> main.exe
-│   └── main_gui.cpp   # point-and-click launcher, no console -> gui.exe
-├── test/
-│   └── test_math.cpp  # validation against known analytical results — no SFML needed
-└── Makefile
-```
-
-- **math/** — general-purpose linear algebra and polynomial root-finding (Durand-Kerner). No control-theory knowledge lives here.
-- **control/** — the actual control-systems algorithms: Routh-Hurwitz stability, root locus (with branch identity tracking via the Hungarian algorithm), time-response simulation (RK4), frequency response (log-spaced grid, phase unwrapping, margins found by bracketing + bisection on the computed samples, Nyquist encirclement counting), and the two representation conversions.
-- **view/** — everything SFML-specific: a reusable `Plot` (world↔screen mapping, pan/zoom, grid and numbered axes, clipping to its frame), `Button` / `TextField` / `Slider` widgets, and the windows built from them (`LauncherWindow` is the whole point-and-click app; `RootLocusWindow` and `TimeResponseWindow` are the plot windows both entry points share).
-
-## Getting Started
-
-### Prerequisites
-
-- A C++17 compiler (MSYS2 MinGW64 `g++` on Windows, or plain `g++` / `clang++` elsewhere)
-- SFML 3 — on MSYS2 MinGW64: `pacman -S mingw-w64-x86_64-sfml`
-
-### Build
-
-```bash
-make main   # console menu       -> main.exe
-make gui    # point-and-click app -> gui.exe
-```
-
-`make clean` removes all build output. `make test_math` builds the math/control validation suite, which has no SFML dependency and always builds even without SFML installed — useful after touching anything under `math/` or `control/`.
-
-### Run
-
-```bash
-./gui.exe    # recommended: point-and-click, no console
-./main.exe   # console menu
-```
-
-On Windows, `gui.exe` has no console window at all, so double-clicking it from Explorer works directly. If you run it from a terminal instead, make sure the SFML DLLs (`C:\msys64\mingw64\bin`) are reachable — either launch it from the MSYS2 MINGW64 shell, or copy the DLLs next to the `.exe`.
-
-## Status
-
-A personal project built alongside a university Control Systems course. Feedback and suggestions are welcome.
 <p align="center">
   <img src="assets/banner.svg" alt="Control Systems Visualization Tool — stability, root locus and time/frequency response for linear systems" width="100%">
 </p>
@@ -178,6 +7,7 @@ A personal project built alongside a university Control Systems course. Feedback
   <img src="https://img.shields.io/badge/SFML%203-0E2A1F?style=for-the-badge&logo=sfml&logoColor=3FB27F">
   <img src="https://img.shields.io/badge/Make-0E2A1F?style=for-the-badge&logo=gnubash&logoColor=3FB27F">
   <img src="https://img.shields.io/badge/Windows%20·%20MSYS2-0E2A1F?style=for-the-badge&logo=windows&logoColor=3FB27F">
+  <a href="https://github.com/raulpop-codes/Control-Systems-Visualization-Tool/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/raulpop-codes/Control-Systems-Visualization-Tool/ci.yml?style=for-the-badge&label=CI&labelColor=0E2A1F&color=0E2A1F&logo=githubactions&logoColor=3FB27F"></a>
 </p>
 
 A C++ desktop tool for analyzing and visualizing linear control systems — stability, root locus, and step/impulse response — without doing the linear algebra by hand.
@@ -190,7 +20,7 @@ A C++ desktop tool for analyzing and visualizing linear control systems — stab
 
 ---
 
-**Contents** · [Why this exists](#why-this-exists) · [Features](#features) · [Walkthrough](#walkthrough) · [Tech stack](#tech-stack) · [Architecture](#architecture) · [Getting started](#getting-started)
+**Contents** · [Why this exists](#why-this-exists) · [Features](#features) · [Tests](#tests) · [Walkthrough](#walkthrough) · [Tech stack](#tech-stack) · [Architecture](#architecture) · [Getting started](#getting-started)
 
 ---
 
@@ -231,6 +61,38 @@ Every plot has a grid and tick labels at round values (1, 2, 5 × a power of ten
 ### Two ways to run it
 
 A point-and-click GUI with no console at all for quick use, or a console menu for anyone who'd rather type values at a prompt.
+
+## Tests
+
+`test/test_math.cpp` is a validation suite of **87 checks** over the math and control
+layers, run on every push by GitHub Actions. Reference values come from closed-form
+analysis or from the worked examples in the course guides, and each check prints what
+it got next to what it expected — so the output stays readable by hand, while a
+mismatch sets the exit code.
+
+```bash
+make test_math && ./test_math.exe
+```
+
+No SFML dependency: it builds and runs even without SFML installed.
+
+| Area | Checked against |
+|---|---|
+| `Matrix::determinant` | hand-computed 2×2 and 3×3 values |
+| `Polynomial::roots` (Durand–Kerner) | known factorisations, including repeated roots |
+| `Stability::routhHurwitz` | the guide's worked table and right-half-plane root count |
+| `RootLocus` | centroid, asymptote angles, K_critic = 48 |
+| `StateSpace::characteristicPolynomial` | companion form of (s+1)(s+2) |
+| `Conversions` TF → state-space → TF | round-trip coefficients |
+| `TimeResponse` (RK4) | analytical step and impulse of 1/(s+1), at dt = 0.001 and dt = 0.1 |
+| `FrequencyResponse` | Bode magnitude and phase, continuous unwrapping past −180°, automatic range |
+| Margins | ω_t, γ_k, ω_-π, m_k and K_critic for minimum-phase, non-minimum-phase and dead-time plants |
+| Nyquist criterion | encirclement verdict **cross-checked against Routh–Hurwitz** at eight gains, including an open-loop unstable plant |
+
+The Nyquist checks are the ones worth pointing at: the verdict from counting
+encirclements and the verdict from the Routh table are reached by completely
+independent routes, and the suite asserts they agree. The K_critic found by the root
+locus and the one found from the gain margin are likewise asserted to be the same 48.
 
 ## Walkthrough
 
@@ -335,7 +197,7 @@ Control-Systems-Visualization-Tool
 │   ├── main.cpp       # console menu                            -> main.exe
 │   └── main_gui.cpp   # point-and-click launcher, no console    -> gui.exe
 ├── test/
-│   └── test_math.cpp  # validation against known analytical results — no SFML needed
+│   └── test_math.cpp  # 87 assertions vs analytical results — no SFML needed
 └── Makefile
 ```
 
