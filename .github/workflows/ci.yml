@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validation:
+    name: Math & control validation (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build validation suite
+        run: make test_math
+
+      - name: Run validation suite
+        run: timeout 120 ./test_math.exe
+
+  build-windows:
+    name: Build console + GUI (Windows, MSYS2)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-sfml
+
+      - name: Build console app
+        run: make main
+
+      - name: Build GUI app
+        run: make gui

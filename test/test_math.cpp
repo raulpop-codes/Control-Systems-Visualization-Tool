@@ -1,6 +1,19 @@
+// Validation suite for the math and control layers.
+//
+// Every reference value below comes either from closed-form analysis or from
+// the worked examples in the course guides (Indrumar TS1). Each check prints
+// what it got next to what it expected, so the output is still readable by
+// hand -- but a mismatch now also sets the exit code, which is what CI reads.
+//
+// Build and run:  make test_math && ./test_math.exe
+// No SFML dependency: this always builds, even without SFML installed.
+
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <string>
+#include <vector>
+#include <sstream>
 #include "math/Matrix.hpp"
 #include "math/Polynomial.hpp"
 #include "control/TransferFunction.hpp"
@@ -14,41 +27,80 @@
 
 using namespace std;
 
-static void printRoots(const vector<ComplexNumber>& r) {
-    for (const auto& c : r) cout << "  " << c << "\n";
-}
+// ---------------------------------------------------------------- harness --
 
-static void printRouth(const RouthResult& res) {
-    for (const auto& row : res.table) {
-        for (double v : row) cout << setw(10) << v;
-        cout << "\n";
-    }
-    cout << "RHP roots: " << res.rightHalfPlaneRoots
-         << "  stable: " << (res.stable ? "yes" : "no")
-         << "  marginal: " << (res.marginallyStable ? "yes" : "no") << "\n\n";
-}
+static int checksRun = 0;
+static int checksFailed = 0;
 
-
-// Prints the margins the way the course reports them (m_k, not MATLAB's 1/m_k).
-static void printMargins(const FrequencyResponse& fr, double K) {
-    Margins m = fr.margins(K);
-    cout << "  K=" << K << ":  ";
-    if(m.wt) cout << "wt=" << *m.wt << "  gamma_k=" << *m.phaseMargin << " deg  ";
-    else     cout << "wt=none  ";
-    if(m.wPi) cout << "w_-pi=" << *m.wPi << "  m_k=" << *m.gainMargin
-                   << " (" << 20.0 * log10(*m.gainMargin) << " dB)  ";
-    else      cout << "w_-pi=none  ";
-    if(m.criticalGain()) cout << "Kcrit=" << *m.criticalGain();
-    cout << "  -> " << (m.stable() ? "stable" : "unstable") << "\n";
-}
-
-static void printNyquist(const FrequencyResponse& fr, const TransferFunction& G, double K, bool withRouth) {
-    NyquistVerdict v = fr.nyquist(K);
-    cout << "  K=" << K << ":  delta arg=" << v.deltaDeg << " deg, required " << v.requiredDeg
-         << " (N0=" << v.N0 << ", N+=" << v.Nplus << ") -> " << (v.stable ? "stable" : "unstable");
-    if(withRouth)
-        cout << "   | Routh: " << (Stability::routhHurwitz(G.closedLoopCharacteristicPolynomial(K)).stable ? "stable" : "unstable");
+static void verdict(bool ok, const string& what, const string& got, const string& want) {
+    ++checksRun;
+    if (!ok) ++checksFailed;
+    cout << (ok ? "  [ok]   " : "  [FAIL] ") << left << setw(46) << what << right
+         << "  got " << setw(26) << got;
+    if (!ok) cout << "   want " << want;
     cout << "\n";
+}
+
+static string num(double v) {
+    ostringstream os;
+    os << fixed << setprecision(4) << v;
+    return os.str();
+}
+
+static void checkNear(const string& what, double got, double want, double tol = 1e-3) {
+    verdict(fabs(got - want) <= tol, what, num(got), num(want));
+}
+
+static void checkInt(const string& what, int got, int want) {
+    verdict(got == want, what, to_string(got), to_string(want));
+}
+
+static void checkBool(const string& what, bool got, bool want) {
+    verdict(got == want, what, got ? "true" : "false", want ? "true" : "false");
+}
+
+// Compares two root sets regardless of ordering.
+static void checkRoots(const string& what, const vector<ComplexNumber>& got,
+                       const vector<ComplexNumber>& want, double tol = 1e-3) {
+    bool ok = got.size() == want.size();
+    if (ok) {
+        vector<bool> used(want.size(), false);
+        for (const auto& g : got) {
+            bool matched = false;
+            for (size_t i = 0; i < want.size() && !matched; ++i) {
+                if (used[i]) continue;
+                if (fabs(g.getReal() - want[i].getReal()) <= tol &&
+                    fabs(g.getImag() - want[i].getImag()) <= tol) {
+                    used[i] = true;
+                    matched = true;
+                }
+            }
+            if (!matched) { ok = false; break; }
+        }
+    }
+    ostringstream g, w;
+    g << fixed << setprecision(3);
+    for (const auto& c : got) g << c << " ";
+    w << fixed << setprecision(3);
+    for (const auto& c : want) w << c << " ";
+    verdict(ok, what, g.str(), w.str());
+}
+
+static void checkCoeffs(const string& what, const vector<double>& got,
+                        const vector<double>& want, double tol = 1e-3) {
+    bool ok = got.size() == want.size();
+    for (size_t i = 0; ok && i < got.size(); ++i)
+        if (fabs(got[i] - want[i]) > tol) ok = false;
+    ostringstream g, w;
+    g << fixed << setprecision(3);
+    for (double v : got) g << v << " ";
+    w << fixed << setprecision(3);
+    for (double v : want) w << v << " ";
+    verdict(ok, what, g.str(), w.str());
+}
+
+static void section(const string& title) {
+    cout << "\n=== " << title << " ===\n";
 }
 
 static FrequencyResponse bodeOf(const TransferFunction& G, double tau = 0.0) {
@@ -58,150 +110,205 @@ static FrequencyResponse bodeOf(const TransferFunction& G, double tau = 0.0) {
     return fr;
 }
 
+// All margins reported the way the course does (m_k, not MATLAB's 1/m_k).
+static void checkMargins(const string& label, const FrequencyResponse& fr, double K,
+                         double wt, double gammaK, double wPi, double mK,
+                         double kCrit, bool stable) {
+    Margins m = fr.margins(K);
+    verdict(m.wt.has_value(), label + ": wt present", m.wt ? "yes" : "no", "yes");
+    verdict(m.wPi.has_value(), label + ": w_-pi present", m.wPi ? "yes" : "no", "yes");
+    if (!m.wt || !m.wPi) return;
+    checkNear(label + ": wt", *m.wt, wt);
+    checkNear(label + ": gamma_k (deg)", *m.phaseMargin, gammaK, 1e-2);
+    checkNear(label + ": w_-pi", *m.wPi, wPi);
+    checkNear(label + ": m_k", *m.gainMargin, mK);
+    checkNear(label + ": K_critic", *m.criticalGain(), kCrit);
+    checkBool(label + ": stable", m.stable(), stable);
+}
+
+// The point of the Nyquist criterion here: its verdict has to agree with
+// Routh-Hurwitz, which is computed by a completely independent route.
+static void checkNyquistVsRouth(const string& label, const FrequencyResponse& fr,
+                                const TransferFunction& G, double K, bool stable) {
+    NyquistVerdict v = fr.nyquist(K);
+    bool routh = Stability::routhHurwitz(G.closedLoopCharacteristicPolynomial(K)).stable;
+    checkBool(label + ": Nyquist verdict", v.stable, stable);
+    checkBool(label + ": Routh agrees with Nyquist", routh, v.stable);
+    cout << "          delta arg=" << num(v.deltaDeg) << " deg, required "
+         << num(v.requiredDeg) << " (N0=" << v.N0 << ", N+=" << v.Nplus << ")\n";
+}
+
+// ------------------------------------------------------------------ tests --
+
 int main() {
     cout << fixed << setprecision(4);
+    cout << "Validation suite -- math and control layers\n";
 
-    cout << "=== Matrix: determinant ===\n";
+    section("Matrix: determinant");
     Matrix m2(2, 2);
     m2.at(0,0)=1; m2.at(0,1)=2; m2.at(1,0)=3; m2.at(1,1)=4;
-    cout << "2x2 det (expect -2): " << m2.determinant() << "\n";
+    checkNear("2x2 determinant", m2.determinant(), -2.0);
 
     Matrix m3(3, 3);
     double vals[3][3] = {{6,1,1},{4,-2,5},{2,8,7}};
     for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) m3.at(i,j) = vals[i][j];
-    cout << "3x3 det (expect -306): " << m3.determinant() << "\n\n";
+    checkNear("3x3 determinant", m3.determinant(), -306.0);
 
-    cout << "=== Polynomial::roots (Durand-Kerner) ===\n";
-    cout << "s^2-5s+6 (expect 2, 3):\n";
-    printRoots(Polynomial({6,-5,1}).roots());
-    cout << "s^2+1 (expect +-i):\n";
-    printRoots(Polynomial({1,0,1}).roots());
+    section("Polynomial::roots (Durand-Kerner)");
+    checkRoots("s^2-5s+6", Polynomial({6,-5,1}).roots(),
+               {ComplexNumber(2,0), ComplexNumber(3,0)});
+    checkRoots("s^2+1", Polynomial({1,0,1}).roots(),
+               {ComplexNumber(0,1), ComplexNumber(0,-1)});
 
-    cout << "\n=== Stability::routhHurwitz vs Indrumar TS1, sectiunea 7.4 ===\n";
-    cout << "lambda^4 - 0.5*lambda^2 + 1/16 (expect table to match the book exactly, 2 RHP roots):\n";
-    printRouth(Stability::routhHurwitz(Polynomial({1.0/16, 0, -0.5, 0, 1})));
+    section("Repeated roots do not throw");
+    checkRoots("(s+1)^2", Polynomial({1,2,1}).roots(),
+               {ComplexNumber(-1,0), ComplexNumber(-1,0)});
+    checkRoots("s(s+2)^2", Polynomial({0,4,4,1}).roots(),
+               {ComplexNumber(0,0), ComplexNumber(-2,0), ComplexNumber(-2,0)});
 
-    cout << "=== TransferFunction + RootLocus vs Indrumar TS1, exemplul (e), 11.2/11.3 ===\n";
-    cout << "H(s) = 1 / (s(s+2)(s+4))\n";
-    Polynomial num({1.0});
+    section("Stability::routhHurwitz vs Indrumar TS1, 7.4");
+    // lambda^4 - 0.5*lambda^2 + 1/16 -- the book's worked example.
+    RouthResult routh = Stability::routhHurwitz(Polynomial({1.0/16, 0, -0.5, 0, 1}));
+    for (const auto& row : routh.table) {
+        cout << "         ";
+        for (double v : row) cout << setw(10) << v;
+        cout << "\n";
+    }
+    checkInt ("right-half-plane roots", routh.rightHalfPlaneRoots, 2);
+    checkBool("stable", routh.stable, false);
+    checkBool("marginally stable", routh.marginallyStable, false);
+
+    section("TransferFunction + RootLocus vs Indrumar TS1, exemplul (e)");
+    // H(s) = 1 / (s(s+2)(s+4))
     Polynomial den = Polynomial({0.0,1.0}) * Polynomial({2.0,1.0}) * Polynomial({4.0,1.0});
-    TransferFunction G(num, den);
+    TransferFunction G(Polynomial({1.0}), den);
     RootLocus rl(G);
 
-    cout << "poles (expect 0, -2, -4):\n";
-    printRoots(G.poles());
-    cout << "asymptote centroid (expect -2): " << rl.asymptoteCentroid() << "\n";
-    cout << "asymptote angles in degrees (expect 60, 180, 300):\n";
-    for (double a : rl.asymptoteAngles()) cout << "  " << a * 180.0 / M_PI << "\n";
+    checkRoots("open-loop poles", G.poles(),
+               {ComplexNumber(0,0), ComplexNumber(-2,0), ComplexNumber(-4,0)});
+    checkNear ("asymptote centroid", rl.asymptoteCentroid(), -2.0);
 
-    double kc;
-    if (rl.findCriticalK(200.0, kc))
-        cout << "critical K (book says 48): " << kc << "\n";
-    else
-        cout << "no critical K found in range\n";
+    vector<double> anglesDeg;
+    for (double a : rl.asymptoteAngles()) anglesDeg.push_back(a * 180.0 / M_PI);
+    checkCoeffs("asymptote angles (deg)", anglesDeg, {60.0, 180.0, 300.0});
 
-    cout << "\nclosed-loop poles, K=10 (< 48, expect all Re<0):\n";
-    printRoots(G.closedLoopPoles(10.0));
-    cout << "closed-loop poles, K=100 (> 48, expect two with Re>0):\n";
-    printRoots(G.closedLoopPoles(100.0));
+    double kc = 0.0;
+    bool found = rl.findCriticalK(200.0, kc);
+    checkBool("critical K found", found, true);
+    if (found) checkNear("critical K (book: 48)", kc, 48.0, 1e-2);
 
-    cout << "\n=== StateSpace::characteristicPolynomial (Faddeev-LeVerrier) ===\n";
+    // Below the critical gain every closed-loop pole must sit in the left half-plane.
+    int unstableAt10 = 0;
+    for (const auto& p : G.closedLoopPoles(10.0)) if (p.getReal() > 0) ++unstableAt10;
+    checkInt("closed-loop poles with Re>0 at K=10", unstableAt10, 0);
+
+    int unstableAt100 = 0;
+    for (const auto& p : G.closedLoopPoles(100.0)) if (p.getReal() > 0) ++unstableAt100;
+    checkInt("closed-loop poles with Re>0 at K=100", unstableAt100, 2);
+
+    section("StateSpace::characteristicPolynomial (Faddeev-LeVerrier)");
     Matrix A(2, 2);
     A.at(0,0)=0; A.at(0,1)=1; A.at(1,0)=-2; A.at(1,1)=-3;
     Matrix B(2, 1); B.at(1,0) = 1;
     Matrix C(1, 2); C.at(0,0) = 1;
     Matrix D(1, 1);
-    StateSpace ss(A, B, C, D);
-    Polynomial charPoly = ss.characteristicPolynomial();
-    cout << "companion of (s+1)(s+2): coeffs ascending (expect 2,3,1): ";
-    for (double c : charPoly.coefficients()) cout << c << " ";
-    cout << "\nroots (expect -1,-2):\n";
-    printRoots(charPoly.roots());
+    Polynomial charPoly = StateSpace(A, B, C, D).characteristicPolynomial();
+    checkCoeffs("companion of (s+1)(s+2), ascending", charPoly.coefficients(), {2.0, 3.0, 1.0});
+    checkRoots ("its roots", charPoly.roots(), {ComplexNumber(-1,0), ComplexNumber(-2,0)});
 
-    cout << "\n=== Conversions: TF -> StateSpace (FCC) -> TF round trip ===\n";
-    StateSpace ssFromTf = Conversions::toStateSpace(G);
-    TransferFunction backToTf = Conversions::toTransferFunction(ssFromTf);
-    cout << "round-trip numerator (expect [1]): ";
-    for (double c : backToTf.numerator().coefficients()) cout << c << " ";
-    cout << "\nround-trip denominator (expect [0,8,6,1]): ";
-    for (double c : backToTf.denominator().coefficients()) cout << c << " ";
-    cout << "\n";
+    section("Conversions: TF -> StateSpace (FCC) -> TF round trip");
+    TransferFunction backToTf = Conversions::toTransferFunction(Conversions::toStateSpace(G));
+    checkCoeffs("round-trip numerator", backToTf.numerator().coefficients(), {1.0});
+    checkCoeffs("round-trip denominator", backToTf.denominator().coefficients(), {0.0, 8.0, 6.0, 1.0});
 
-    cout << "\n=== TimeResponse (RK4) vs analytical, H(s)=1/(s+1) ===\n";
+    section("TimeResponse (RK4) vs analytical, H(s)=1/(s+1)");
     Matrix Af(1,1); Af.at(0,0) = -1;
     Matrix Bf(1,1); Bf.at(0,0) = 1;
     Matrix Cf(1,1); Cf.at(0,0) = 1;
     Matrix Df(1,1);
     StateSpace firstOrder(Af, Bf, Cf, Df);
-    auto stepSamples = TimeResponse::step(firstOrder, 3.0, 0.001);
-    auto impulseSamples = TimeResponse::impulse(firstOrder, 3.0, 0.001);
-    int idxAt2 = 2000; // t = 2.0 at dt = 0.001
-    cout << "step at t=2 (expect ~" << (1.0 - exp(-2.0)) << "): " << stepSamples[idxAt2].y << "\n";
-    cout << "impulse at t=2 (expect ~" << exp(-2.0) << "): " << impulseSamples[idxAt2].y << "\n";
 
-    // A step 100x coarser: forward Euler would be off in the 2nd decimal
-    // here (about 0.8784 instead of 0.8647); RK4 stays accurate.
-    auto coarseSamples = TimeResponse::step(firstOrder, 3.0, 0.1);
-    cout << "step at t=2, dt=0.1 (expect ~" << (1.0 - exp(-2.0)) << "): " << coarseSamples[20].y << "\n";
+    auto stepFine    = TimeResponse::step(firstOrder, 3.0, 0.001);
+    auto impulseFine = TimeResponse::impulse(firstOrder, 3.0, 0.001);
+    checkNear("step at t=2, dt=0.001",    stepFine[2000].y,    1.0 - exp(-2.0), 1e-5);
+    checkNear("impulse at t=2, dt=0.001", impulseFine[2000].y, exp(-2.0),       1e-5);
 
-    cout << "\n=== Repeated roots no longer throw ===\n";
-    cout << "(s+1)^2 (expect -1, -1):\n";
-    printRoots(Polynomial({1,2,1}).roots());
-    cout << "s(s+2)^2 (expect 0, -2, -2):\n";
-    printRoots(Polynomial({0,4,4,1}).roots());
+    // 100x coarser: forward Euler would land near 0.8784 instead of 0.8647.
+    auto stepCoarse = TimeResponse::step(firstOrder, 3.0, 0.1);
+    checkNear("step at t=2, dt=0.1 (RK4 stays accurate)", stepCoarse[20].y, 1.0 - exp(-2.0), 1e-4);
 
-    cout << "\n=== FrequencyResponse: Bode, phase unwrapping, automatic range ===\n";
+    section("FrequencyResponse: Bode, phase unwrapping, automatic range");
     TransferFunction lead(Polynomial({40.0, 2.0}), Polynomial({70.0, 1.0})); // 2(s+20)/(s+70)
     FrequencyResponse frLead = bodeOf(lead);
-    for(double w : {1.0, 300.0}){
-        ComplexNumber h = frLead.at(w);
-        cout << "2(s+20)/(s+70) at w=" << w << ": " << 20.0 * log10(h.magnitude()) << " dB, "
-             << h.phase() * 180.0 / M_PI << " deg  (expect -4.85 dB, 2.0 deg  /  5.81 dB, 9.3 deg)\n";
-    }
+    ComplexNumber h1   = frLead.at(1.0);
+    ComplexNumber h300 = frLead.at(300.0);
+    checkNear("2(s+20)/(s+70) at w=1: magnitude (dB)",   20.0 * log10(h1.magnitude()),   -4.8508, 1e-3);
+    checkNear("2(s+20)/(s+70) at w=1: phase (deg)",      h1.phase() * 180.0 / M_PI,       2.0439, 1e-3);
+    checkNear("2(s+20)/(s+70) at w=300: magnitude (dB)", 20.0 * log10(h300.magnitude()),  5.8096, 1e-3);
+    checkNear("2(s+20)/(s+70) at w=300: phase (deg)",    h300.phase() * 180.0 / M_PI,     9.3199, 1e-3);
+
+    // Continuous phase: atan2 alone would report +91.7 here instead of -268.3.
     TransferFunction triple(Polynomial({1.0}), Polynomial({1.0, 3.0, 3.0, 1.0})); // 1/(s+1)^3
     FrequencyResponse frTriple(triple);
     frTriple.compute(1e-2, 1e2);
-    cout << "1/(s+1)^3 phase at w=100 (expect about -268.3, continuous -- atan2 alone would give +91.7): "
-         << frTriple.samples().back().phaseDeg << " deg\n";
-    auto range = FrequencyResponse::autoRange(G);
-    cout << "autoRange of 1/(s(s+2)(s+4)) (expect 0.01 .. 1000): " << range.first << " .. " << range.second << "\n";
+    checkNear("1/(s+1)^3 unwrapped phase at w=100 (deg)",
+              frTriple.samples().back().phaseDeg, -268.2812, 1e-2);
 
-    cout << "\n=== Margins (course convention) ===\n";
-    cout << "1/(s(s+2)(s+4)): expect w_-pi=2.8284 (=sqrt 8), m_k=1/48=0.02083, Kcrit=48 (same as the root locus)\n";
+    auto range = FrequencyResponse::autoRange(G);
+    checkNear("autoRange lower bound", range.first,  0.01,   1e-6);
+    checkNear("autoRange upper bound", range.second, 1000.0, 1e-6);
+
+    section("Margins (course convention)");
     FrequencyResponse frBook = bodeOf(G);
-    printMargins(frBook, 1.0);
+    // 1/(s(s+2)(s+4)): w_-pi = sqrt(8), m_k = 1/48, K_critic = 48 -- same 48 the root locus found.
+    checkMargins("1/(s(s+2)(s+4)) K=1", frBook, 1.0,
+                 0.1247, 84.6467, sqrt(8.0), 1.0/48.0, 48.0, true);
 
     TransferFunction nmp(Polynomial({2.0, -1.0}), Polynomial({0.0, 4.0, 4.0, 1.0})); // (-s+2)/(s(s+2)^2)
     FrequencyResponse frNmp = bodeOf(nmp);
-    cout << "(-s+2)/(s(s+2)^2): K=1 expect wt=0.4859 gamma_k=49.0 w_-pi=1.1547 m_k=0.375 (-8.52 dB) Kcrit=2.667\n"
-         << "                   K=5 expect wt=1.8399 gamma_k=-37.8 m_k=1.875 (5.46 dB) -> unstable\n";
-    printMargins(frNmp, 1.0);
-    printMargins(frNmp, 5.0);
+    checkMargins("(-s+2)/(s(s+2)^2) K=1", frNmp, 1.0,
+                 0.4859, 49.0362, 2.0/sqrt(3.0), 0.375, 8.0/3.0, true);
+    checkMargins("(-s+2)/(s(s+2)^2) K=5", frNmp, 5.0,
+                 1.8399, -37.8367, 2.0/sqrt(3.0), 1.875, 8.0/3.0, false);
 
     TransferFunction nmp2(Polynomial({4.0, -2.0}), Polynomial({0.0, 6.0, 1.0})); // -2(s-2)/(s(s+6))
-    cout << "-2(s-2)/(s(s+6)): expect wt=0.7017 gamma_k=64.0 w_-pi=3.4641 (=2 sqrt 3) m_k=0.3333 (-9.54 dB)\n";
-    printMargins(bodeOf(nmp2), 1.0);
+    checkMargins("-2(s-2)/(s(s+6)) K=1", bodeOf(nmp2), 1.0,
+                 0.7017, 63.9952, 2.0*sqrt(3.0), 1.0/3.0, 3.0, true);
 
+    // Dead time: wt > w_-pi, so the loop is unstable despite a positive gain margin reading.
     TransferFunction delayed(Polynomial({72.0, 8.0}), Polynomial({0.0, 50.0, 1.0})); // 8(s+9)/(s(s+50)) e^{-2s}
-    cout << "8(s+9)/(s(s+50)) e^{-2s}: expect wt=1.4582 gamma_k=-69.6 first w_-pi=0.8228 m_k=1.757 -> unstable (wt > w_-pi)\n";
-    printMargins(bodeOf(delayed, 2.0), 1.0);
+    FrequencyResponse frDelayed = bodeOf(delayed, 2.0);
+    checkMargins("8(s+9)/(s(s+50)) e^-2s K=1", frDelayed, 1.0,
+                 1.4582, -69.5600, 0.8228, 1.7573, 0.5691, false);
 
-    cout << "\n=== Nyquist: counting encirclements, cross-checked with Routh-Hurwitz ===\n";
-    cout << "(-s+2)/(s(s+2)^2): stable for K < 8/3, required delta = 90 deg\n";
-    printNyquist(frNmp, nmp, 1.0, true);
-    printNyquist(frNmp, nmp, 2.5, true);
-    printNyquist(frNmp, nmp, 2.8, true);
-    printNyquist(frNmp, nmp, 5.0, true);
-    cout << "1/(s(s+2)(s+4)): stable for K < 48\n";
-    printNyquist(frBook, G, 10.0, true);
-    printNyquist(frBook, G, 100.0, true);
-    TransferFunction unstableOl(Polynomial({1.0}), Polynomial({-1.0, 1.0})); // 1/(s-1): needs K > 1
-    cout << "1/(s-1) (N+=1, required 180 deg): stable for K > 1\n";
+    section("Nyquist criterion, cross-checked against Routh-Hurwitz");
+    // (-s+2)/(s(s+2)^2) is stable for K < 8/3.
+    checkNyquistVsRouth("(-s+2)/(s(s+2)^2) K=1.0", frNmp, nmp, 1.0, true);
+    checkNyquistVsRouth("(-s+2)/(s(s+2)^2) K=2.5", frNmp, nmp, 2.5, true);
+    checkNyquistVsRouth("(-s+2)/(s(s+2)^2) K=2.8", frNmp, nmp, 2.8, false);
+    checkNyquistVsRouth("(-s+2)/(s(s+2)^2) K=5.0", frNmp, nmp, 5.0, false);
+
+    // 1/(s(s+2)(s+4)) is stable for K < 48.
+    checkNyquistVsRouth("1/(s(s+2)(s+4)) K=10",  frBook, G, 10.0,  true);
+    checkNyquistVsRouth("1/(s(s+2)(s+4)) K=100", frBook, G, 100.0, false);
+
+    // An open-loop unstable plant: 1/(s-1) needs K > 1, so N+=1 and 180 deg are required.
+    TransferFunction unstableOl(Polynomial({1.0}), Polynomial({-1.0, 1.0}));
     FrequencyResponse frUnst = bodeOf(unstableOl);
-    printNyquist(frUnst, unstableOl, 0.5, true);
-    printNyquist(frUnst, unstableOl, 3.0, true);
-    cout << "8(s+9)/(s(s+50)) e^{-2s} (no Routh with dead time): ";
-    printNyquist(bodeOf(delayed, 2.0), delayed, 1.0, false);
+    checkNyquistVsRouth("1/(s-1) K=0.5", frUnst, unstableOl, 0.5, false);
+    checkNyquistVsRouth("1/(s-1) K=3.0", frUnst, unstableOl, 3.0, true);
 
-    return 0;
+    // With dead time there is no finite characteristic polynomial, so Nyquist stands alone.
+    NyquistVerdict delayedVerdict = frDelayed.nyquist(1.0);
+    checkBool("8(s+9)/(s(s+50)) e^-2s K=1: Nyquist verdict (no Routh possible)",
+              delayedVerdict.stable, false);
+
+    // ------------------------------------------------------------ summary --
+    cout << "\n" << string(72, '-') << "\n";
+    if (checksFailed == 0)
+        cout << "All " << checksRun << " checks passed.\n";
+    else
+        cout << checksFailed << " of " << checksRun << " checks FAILED.\n";
+
+    return checksFailed == 0 ? 0 : 1;
 }
